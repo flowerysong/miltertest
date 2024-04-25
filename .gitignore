@@ -41,5 +41,5 @@ opendkim-testkey
 .libs
 core
 *.core
-opendkim*.[58]                                
+opendkim*.[58]
 miltertest
