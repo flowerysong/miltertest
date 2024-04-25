@@ -13,6 +13,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,36 +36,10 @@
 #define SMFI_PROT_VERSION SMFI_VERSION
 #endif /* ! SMFI_PROT_VERSION */
 
-/* libopendkim includes */
-#include <dkim.h>
-
-/* libbsd if found */
-#ifdef USE_BSD_H
-#include <bsd/string.h>
-#endif /* USE_BSD_H */
-
-/* libstrl if needed */
-#ifdef USE_STRL_H
-#include <strl.h>
-#endif /* USE_STRL_H */
-
 /* Lua includes */
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
-
-/* types */
-#ifndef HAVE_USECONDS_T
-typedef unsigned int useconds_t;
-#endif /* ! HAVE_USECONDS_T */
-
-/* macros */
-#ifndef FALSE
-#define FALSE 0
-#endif /* ! FALSE */
-#ifndef TRUE
-#define TRUE 1
-#endif /* ! TRUE */
 
 #ifdef SMFIP_NODATA
 #define CHECK_MPOPTS(c, o) (((c)->ctx_mpopts & (o)) != 0)
@@ -83,9 +58,6 @@ typedef unsigned int useconds_t;
 #define SMFIP_NR_BODY 0
 #define SMFIP_NR_UNKN 0
 #endif /* SMFIP_NR_CONN */
-
-#define MT_PRODUCT "OpenDKIM milter test facility"
-#define MT_VERSION "1.6.0"
 
 #define BUFRSZ 1024
 #define CHUNKSZ 65536
@@ -174,7 +146,7 @@ struct mt_context {
 };
 
 struct mt_lua_io {
-    _Bool       lua_io_done;
+    bool        lua_io_done;
     size_t      lua_io_scriptlen;
     const char *lua_io_script;
 };
@@ -194,8 +166,8 @@ static const luaL_Reg mt_library[] = {{"abort", mt_abort},
         {"test_option", mt_test_option}, {"unknown", mt_unknown}, {NULL, NULL}};
 
 /* globals */
-_Bool        rusage;
-_Bool        nowait;
+bool         rusage;
+bool         nowait;
 int          verbose;
 unsigned int tmo;
 pid_t        filterpid;
@@ -253,7 +225,7 @@ mt_lua_reader(lua_State *l, void *data, size_t *size) {
         *size = 0;
         return NULL;
     } else if (io->lua_io_script != NULL) {
-        io->lua_io_done = TRUE;
+        io->lua_io_done = true;
         *size = io->lua_io_scriptlen;
         return io->lua_io_script;
     } else {
@@ -263,7 +235,7 @@ mt_lua_reader(lua_State *l, void *data, size_t *size) {
 
         if (feof(stdin)) {
             *size = 0;
-            io->lua_io_done = TRUE;
+            io->lua_io_done = true;
             return NULL;
         }
 
@@ -334,10 +306,10 @@ mt_flush_eomreqs(struct mt_context *ctx) {
 **  	data -- data received (i.e. request parameters)
 **
 **  Return value:
-**  	TRUE iff addition was successful.
+**  	true iff addition was successful.
 */
 
-_Bool
+bool
 mt_eom_request(struct mt_context *ctx, char cmd, size_t len, char *data) {
     struct mt_eom_request *r;
 
@@ -345,7 +317,7 @@ mt_eom_request(struct mt_context *ctx, char cmd, size_t len, char *data) {
 
     r = (struct mt_eom_request *)malloc(sizeof *r);
     if (r == NULL) {
-        return FALSE;
+        return false;
     }
 
     r->eom_request = cmd;
@@ -353,14 +325,14 @@ mt_eom_request(struct mt_context *ctx, char cmd, size_t len, char *data) {
     r->eom_rdata = malloc(len);
     if (r->eom_rdata == NULL) {
         free(r);
-        return FALSE;
+        return false;
     }
     memcpy(r->eom_rdata, data, len);
 
     r->eom_next = ctx->ctx_eomreqs;
     ctx->ctx_eomreqs = r;
 
-    return TRUE;
+    return true;
 }
 
 /*
@@ -371,12 +343,12 @@ mt_eom_request(struct mt_context *ctx, char cmd, size_t len, char *data) {
 **  	cmd -- milter command received (returned)
 ** 	buf -- where to write data
 **  	buflen -- bytes available at "buf" (updated)
-** 
+**
 **  Return value:
-**  	TRUE iff successful.
+**  	true iff successful.
 */
 
-_Bool
+bool
 mt_milter_read(int fd, char *cmd, const char *buf, size_t *len) {
     int            i;
     int            expl;
@@ -397,12 +369,12 @@ mt_milter_read(int fd, char *cmd, const char *buf, size_t *len) {
     if (i == 0) {
         fprintf(stderr, "%s: select(): timeout on fd %d\n", progname, fd);
 
-        return FALSE;
+        return false;
     } else if (i == -1) {
         fprintf(stderr, "%s: select(): fd %d: %s\n", progname, fd,
                 strerror(errno));
 
-        return FALSE;
+        return false;
     }
 
     rlen = read(fd, data, sizeof data);
@@ -410,7 +382,7 @@ mt_milter_read(int fd, char *cmd, const char *buf, size_t *len) {
         fprintf(stderr, "%s: read(%d): returned %ld, expected %ld\n", progname,
                 fd, (long)rlen, (long)sizeof data);
 
-        return FALSE;
+        return false;
     }
 
     *cmd = data[ MILTER_LEN_BYTES ];
@@ -426,7 +398,7 @@ mt_milter_read(int fd, char *cmd, const char *buf, size_t *len) {
             fprintf(stderr, "%s: read(%d): returned %ld, expected %ld\n",
                     progname, fd, (long)rlen, (long)expl);
 
-            return FALSE;
+            return false;
         }
     }
 
@@ -450,10 +422,10 @@ mt_milter_read(int fd, char *cmd, const char *buf, size_t *len) {
 **  	len -- length of data at "buf"
 **
 **  Return value:
-**  	TRUE iff successful.
+**  	true iff successful.
 */
 
-_Bool
+bool
 mt_milter_write(int fd, int cmd, const char *buf, size_t len) {
     char         command = (char)cmd;
     ssize_t      sl, i;
@@ -511,10 +483,10 @@ mt_milter_write(int fd, int cmd, const char *buf, size_t len) {
 **  	state -- desired state
 **
 **  Return value:
-**  	TRUE if successful, FALSE otherwise.
+**  	true if successful, false otherwise.
 */
 
-_Bool
+bool
 mt_assert_state(struct mt_context *ctx, int state) {
     size_t   len;
     size_t   s;
@@ -549,11 +521,11 @@ mt_assert_state(struct mt_context *ctx, int state) {
                 MILTER_LEN_BYTES);
 
         if (!mt_milter_write(ctx->ctx_fd, SMFIC_OPTNEG, buf, MILTER_OPTLEN)) {
-            return FALSE;
+            return false;
         }
 
         if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
-            return FALSE;
+            return false;
         }
 
         if (rcmd != SMFIC_OPTNEG) {
@@ -565,7 +537,7 @@ mt_assert_state(struct mt_context *ctx, int state) {
             }
 
             ctx->ctx_state = STATE_DEAD;
-            return FALSE;
+            return false;
         }
 
         /* decode and store requested protocol steps and actions */
@@ -598,14 +570,14 @@ mt_assert_state(struct mt_context *ctx, int state) {
             s = len + strlen(DEFCLIENTIP) + 1;
 
             if (!mt_milter_write(ctx->ctx_fd, SMFIC_CONNECT, buf, s)) {
-                return FALSE;
+                return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if (!CHECK_MPOPTS(ctx, SMFIP_NR_CONN)) {
                 if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
-                    return FALSE;
+                    return false;
                 }
 
                 ctx->ctx_response = rcmd;
@@ -637,14 +609,14 @@ mt_assert_state(struct mt_context *ctx, int state) {
             buf[ len++ ] = '\0';
 
             if (!mt_milter_write(ctx->ctx_fd, SMFIC_HELO, buf, len)) {
-                return FALSE;
+                return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if (!CHECK_MPOPTS(ctx, SMFIP_NR_HELO)) {
                 if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
-                    return FALSE;
+                    return false;
                 }
 
                 ctx->ctx_response = rcmd;
@@ -675,14 +647,14 @@ mt_assert_state(struct mt_context *ctx, int state) {
             buf[ len++ ] = '\0';
 
             if (!mt_milter_write(ctx->ctx_fd, SMFIC_MAIL, buf, len)) {
-                return FALSE;
+                return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if (!CHECK_MPOPTS(ctx, SMFIP_NR_MAIL)) {
                 if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
-                    return FALSE;
+                    return false;
                 }
 
                 ctx->ctx_response = rcmd;
@@ -713,14 +685,14 @@ mt_assert_state(struct mt_context *ctx, int state) {
             buf[ len++ ] = '\0';
 
             if (!mt_milter_write(ctx->ctx_fd, SMFIC_RCPT, buf, len)) {
-                return FALSE;
+                return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if ((ctx->ctx_mpopts & SMFIP_NR_RCPT) == 0) {
                 if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
-                    return FALSE;
+                    return false;
                 }
 
                 ctx->ctx_response = rcmd;
@@ -749,14 +721,14 @@ mt_assert_state(struct mt_context *ctx, int state) {
             buflen = sizeof buf;
 
             if (!mt_milter_write(ctx->ctx_fd, SMFIC_DATA, NULL, 0)) {
-                return FALSE;
+                return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if (!CHECK_MPOPTS(ctx, SMFIP_NR_DATA)) {
                 if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
-                    return FALSE;
+                    return false;
                 }
 
                 ctx->ctx_response = rcmd;
@@ -790,14 +762,14 @@ mt_assert_state(struct mt_context *ctx, int state) {
             buf[ len++ ] = '\0';
 
             if (!mt_milter_write(ctx->ctx_fd, SMFIC_HEADER, buf, len)) {
-                return FALSE;
+                return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if (!CHECK_MPOPTS(ctx, SMFIP_NR_HDR)) {
                 if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
-                    return FALSE;
+                    return false;
                 }
 
                 ctx->ctx_response = rcmd;
@@ -826,14 +798,14 @@ mt_assert_state(struct mt_context *ctx, int state) {
             buflen = sizeof buf;
 
             if (!mt_milter_write(ctx->ctx_fd, SMFIC_EOH, NULL, 0)) {
-                return FALSE;
+                return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if (!CHECK_MPOPTS(ctx, SMFIP_NR_EOH)) {
                 if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
-                    return FALSE;
+                    return false;
                 }
 
                 ctx->ctx_response = rcmd;
@@ -862,14 +834,14 @@ mt_assert_state(struct mt_context *ctx, int state) {
 
             if (!mt_milter_write(
                         ctx->ctx_fd, SMFIC_BODY, DEFBODY, strlen(DEFBODY))) {
-                return FALSE;
+                return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if (!CHECK_MPOPTS(ctx, SMFIP_NR_BODY)) {
                 if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
-                    return FALSE;
+                    return false;
                 }
 
                 ctx->ctx_response = rcmd;
@@ -889,7 +861,7 @@ mt_assert_state(struct mt_context *ctx, int state) {
         ctx->ctx_state = STATE_BODY;
     }
 
-    return TRUE;
+    return true;
 }
 
 /*
@@ -1455,8 +1427,8 @@ mt_sleep(lua_State *l) {
 
 int
 mt_disconnect(lua_State *l) {
-    _Bool polite = TRUE;
-    int   top;
+    bool polite = true;
+    int  top;
 
     struct mt_context *ctx;
 
@@ -2624,7 +2596,7 @@ mt_bodyrandom(lua_State *l) {
         for (c = 0; c < rl; c++) {
             buf[ c ] = (random() % 95) + 32;
         }
-        strlcat(buf, "\r\n", sizeof buf);
+        strncat(buf, "\r\n", sizeof buf);
 
         if (!mt_milter_write(ctx->ctx_fd, SMFIC_BODY, buf, strlen(buf))) {
             lua_pushstring(l, "mt.milter_write() failed");
@@ -3402,7 +3374,7 @@ mt_getheader(lua_State *l) {
 
 /*
 **  USAGE -- print usage message
-** 
+**
 **  Parameters:
 **  	Not now.  Maybe later.
 **
@@ -3453,8 +3425,8 @@ main(int argc, char **argv) {
     verbose = 0;
     filterpid = 0;
     tmo = DEFTIMEOUT;
-    rusage = FALSE;
-    nowait = FALSE;
+    rusage = false;
+    nowait = false;
 
     l = lua_newstate(mt_lua_alloc, NULL);
     if (l == NULL) {
@@ -3491,7 +3463,7 @@ main(int argc, char **argv) {
             break;
 
         case 'u':
-            rusage = TRUE;
+            rusage = true;
             break;
 
         case 'v':
@@ -3499,11 +3471,12 @@ main(int argc, char **argv) {
             break;
 
         case 'V':
-            fprintf(stdout, "%s: %s v%s\n", progname, MT_PRODUCT, MT_VERSION);
+            fprintf(stdout, "%s: %s v%s\n", progname, "milter test program",
+                    VERSION);
             return 0;
 
         case 'w':
-            nowait = TRUE;
+            nowait = true;
             break;
 
         default:
@@ -3517,7 +3490,7 @@ main(int argc, char **argv) {
         return usage();
     }
 
-    io.lua_io_done = FALSE;
+    io.lua_io_done = false;
 
     if (script != NULL) {
         fd = open(script, O_RDONLY);

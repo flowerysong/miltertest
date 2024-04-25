@@ -3,6 +3,7 @@
 *.la
 *.a
 *~
+*.swp
 *.pc
 *.gcda
 *.gcno
