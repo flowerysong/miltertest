@@ -6,7 +6,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 bin_PROGRAMS = miltertest
 
-miltertest_SOURCES = miltertest.c
+miltertest_SOURCES = miltertest.c yasl.c yasl.h
 miltertest_CPPFLAGS = @LIBMILTER_CPPFLAGS@ @LIBLUA_CFLAGS@
 miltertest_LDFLAGS = @LIBMILTER_LDFLAGS@ @LIBLUA_CFLAGS@
 miltertest_LDADD = -lmilter @LIBLUA_LIBS@

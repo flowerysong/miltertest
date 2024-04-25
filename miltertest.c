@@ -3,7 +3,7 @@
  * See COPYING.
  */
 
-#include "build-config.h"
+#include "config.h"
 
 /* system includes */
 #include <arpa/inet.h>
@@ -29,6 +29,9 @@
 #include <sysexits.h>
 #include <time.h>
 #include <unistd.h>
+
+/* YASL */
+#include <yasl.h>
 
 /* libmilter includes */
 #include <libmilter/mfapi.h>
@@ -175,31 +178,6 @@ char         scriptbuf[ BUFRSZ ];
 char        *progname;
 
 /*
-**  MT_INET_NTOA -- thread-safe inet_ntoa()
-**
-**  Parameters:
-**  	a -- (struct in_addr) to be converted
-**  	buf -- destination buffer
-**  	buflen -- number of bytes at buf
-**
-**  Return value:
-**  	Size of the resultant string.  If the result is greater than buflen,
-**  	then buf does not contain the complete result.
-*/
-
-size_t
-mt_inet_ntoa(struct in_addr a, char *buf, size_t buflen) {
-    in_addr_t addr;
-
-    assert(buf != NULL);
-
-    addr = ntohl(a.s_addr);
-
-    return snprintf(buf, buflen, "%d.%d.%d.%d", (addr >> 24),
-            (addr >> 16) & 0xff, (addr >> 8) & 0xff, addr & 0xff);
-}
-
-/*
 **  MT_LUA_READER -- "read" a script and make it available to Lua
 **
 **  Parameters:
@@ -342,14 +320,13 @@ mt_eom_request(struct mt_context *ctx, char cmd, size_t len, char *data) {
 **  	fd -- descriptor to which to write
 **  	cmd -- milter command received (returned)
 ** 	buf -- where to write data
-**  	buflen -- bytes available at "buf" (updated)
 **
 **  Return value:
 **  	true iff successful.
 */
 
 bool
-mt_milter_read(int fd, char *cmd, const char *buf, size_t *len) {
+mt_milter_read(int fd, char *cmd, yastr *buf) {
     int            i;
     int            expl;
     size_t         rlen;
@@ -387,19 +364,22 @@ mt_milter_read(int fd, char *cmd, const char *buf, size_t *len) {
 
     *cmd = data[ MILTER_LEN_BYTES ];
     data[ MILTER_LEN_BYTES ] = '\0';
-    (void)memcpy(&i, data, MILTER_LEN_BYTES);
+    memcpy(&i, data, MILTER_LEN_BYTES);
     expl = ntohl(i) - 1;
 
     rlen = 0;
 
     if (expl > 0) {
-        rlen = read(fd, (void *)buf, expl);
+        yaslclear(*buf);
+        *buf = yaslMakeRoomFor(*buf, expl);
+        rlen = read(fd, (void *)*buf, expl);
         if (rlen != expl) {
             fprintf(stderr, "%s: read(%d): returned %ld, expected %ld\n",
                     progname, fd, (long)rlen, (long)expl);
 
             return false;
         }
+        yaslIncrLen(*buf, expl);
     }
 
     if (verbose > 1) {
@@ -407,9 +387,7 @@ mt_milter_read(int fd, char *cmd, const char *buf, size_t *len) {
                 fd, *cmd, (long)rlen);
     }
 
-    *len = rlen;
-
-    return (expl == rlen);
+    return true;
 }
 
 /*
@@ -426,7 +404,7 @@ mt_milter_read(int fd, char *cmd, const char *buf, size_t *len) {
 */
 
 bool
-mt_milter_write(int fd, int cmd, const char *buf, size_t len) {
+mt_milter_write(int fd, int cmd, const yastr buf) {
     char         command = (char)cmd;
     ssize_t      sl, i;
     int          num_vectors;
@@ -438,11 +416,11 @@ mt_milter_write(int fd, int cmd, const char *buf, size_t len) {
 
     if (verbose > 1) {
         fprintf(stdout, "%s: mt_milter_write(%d): cmd %c, len %ld\n", progname,
-                fd, command, (long)len);
+                fd, command, yasllen(buf));
     }
 
-    nl = htonl(len + 1);
-    (void)memcpy(data, (char *)&nl, MILTER_LEN_BYTES);
+    nl = htonl(yasllen(buf) + 1);
+    memcpy(data, (char *)&nl, MILTER_LEN_BYTES);
     data[ MILTER_LEN_BYTES ] = command;
     sl = MILTER_LEN_BYTES + 1;
 
@@ -451,18 +429,18 @@ mt_milter_write(int fd, int cmd, const char *buf, size_t len) {
     vector[ 0 ].iov_len = sl;
 
     /*
-	**  Determine if there is command data.  If so, there will be two
-	**  vectors.  If not, there will be only one.  The vectors are set
-	**  up here and 'num_vectors' and 'sl' are set appropriately.
-	*/
+    **  Determine if there is command data.  If so, there will be two
+    **  vectors.  If not, there will be only one.  The vectors are set
+    **  up here and 'num_vectors' and 'sl' are set appropriately.
+    */
 
-    if (len <= 0 || buf == NULL) {
+    if (buf == NULL || yasllen(buf) == 0) {
         num_vectors = 1;
     } else {
         num_vectors = 2;
-        sl += len;
+        sl += yasllen(buf);
         vector[ 1 ].iov_base = (void *)buf;
-        vector[ 1 ].iov_len = len;
+        vector[ 1 ].iov_len = yasllen(buf);
     }
 
     /* write the vector(s) */
@@ -488,24 +466,19 @@ mt_milter_write(int fd, int cmd, const char *buf, size_t len) {
 
 bool
 mt_assert_state(struct mt_context *ctx, int state) {
-    size_t   len;
-    size_t   s;
     uint16_t port;
-    char     buf[ BUFRSZ ];
+    yastr    buf = yaslempty();
 
     assert(ctx != NULL);
 
     if (state >= STATE_NEGOTIATED && ctx->ctx_state < STATE_NEGOTIATED) {
         char     rcmd;
-        size_t   buflen;
         uint32_t mta_version;
         uint32_t mta_protoopts;
         uint32_t mta_actions;
         uint32_t nvers;
         uint32_t npopts;
         uint32_t nacts;
-
-        buflen = sizeof buf;
 
         mta_version = SMFI_PROT_VERSION;
         mta_protoopts = SMFI_CURR_PROT;
@@ -515,16 +488,15 @@ mt_assert_state(struct mt_context *ctx, int state) {
         nacts = htonl(mta_actions);
         npopts = htonl(mta_protoopts);
 
-        (void)memcpy(buf, (char *)&nvers, MILTER_LEN_BYTES);
-        (void)memcpy(buf + MILTER_LEN_BYTES, (char *)&nacts, MILTER_LEN_BYTES);
-        (void)memcpy(buf + (MILTER_LEN_BYTES * 2), (char *)&npopts,
-                MILTER_LEN_BYTES);
+        buf = yaslcatlen(buf, &nvers, MILTER_LEN_BYTES);
+        buf = yaslcatlen(buf, &nacts, MILTER_LEN_BYTES);
+        buf = yaslcatlen(buf, &npopts, MILTER_LEN_BYTES);
 
-        if (!mt_milter_write(ctx->ctx_fd, SMFIC_OPTNEG, buf, MILTER_OPTLEN)) {
+        if (!mt_milter_write(ctx->ctx_fd, SMFIC_OPTNEG, buf)) {
             return false;
         }
 
-        if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+        if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
             return false;
         }
 
@@ -541,10 +513,9 @@ mt_assert_state(struct mt_context *ctx, int state) {
         }
 
         /* decode and store requested protocol steps and actions */
-        (void)memcpy((char *)&nvers, buf, MILTER_LEN_BYTES);
-        (void)memcpy((char *)&nacts, buf + MILTER_LEN_BYTES, MILTER_LEN_BYTES);
-        (void)memcpy((char *)&npopts, buf + (MILTER_LEN_BYTES * 2),
-                MILTER_LEN_BYTES);
+        memcpy((char *)&nvers, buf, MILTER_LEN_BYTES);
+        memcpy((char *)&nacts, buf + MILTER_LEN_BYTES, MILTER_LEN_BYTES);
+        memcpy((char *)&npopts, buf + (MILTER_LEN_BYTES * 2), MILTER_LEN_BYTES);
 
         ctx->ctx_mactions = ntohl(nacts);
         ctx->ctx_mpopts = ntohl(npopts);
@@ -554,29 +525,26 @@ mt_assert_state(struct mt_context *ctx, int state) {
 
     if (state >= STATE_CONNINFO && ctx->ctx_state < STATE_CONNINFO) {
         if (!CHECK_MPOPTS(ctx, SMFIP_NOCONNECT)) {
-            char   rcmd;
-            size_t buflen;
-
-            buflen = sizeof buf;
+            char rcmd;
 
             port = htons(DEFCLIENTPORT);
-            len = strlcpy(buf, DEFCLIENTHOST, sizeof buf);
-            buf[ len++ ] = '\0';
-            buf[ len++ ] = '4'; /* IPv4 only for now */
-            memcpy(&buf[ len ], &port, sizeof port);
-            len += sizeof port;
-            memcpy(&buf[ len ], DEFCLIENTIP, strlen(DEFCLIENTIP) + 1);
+            yaslclear(buf);
+            buf = yaslcpy(buf, DEFCLIENTHOST);
+            /* Null, then 4 for IPv4 */
+            buf = yaslcatlen(buf, "\04", 2);
+            buf = yaslcatlen(buf, &port, sizeof(port));
+            buf = yaslcat(buf, DEFCLIENTIP);
 
-            s = len + strlen(DEFCLIENTIP) + 1;
-
-            if (!mt_milter_write(ctx->ctx_fd, SMFIC_CONNECT, buf, s)) {
+            if (!mt_milter_write(ctx->ctx_fd, SMFIC_CONNECT, buf)) {
+                yaslfree(buf);
                 return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if (!CHECK_MPOPTS(ctx, SMFIP_NR_CONN)) {
-                if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+                if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+                    yaslfree(buf);
                     return false;
                 }
 
@@ -600,22 +568,22 @@ mt_assert_state(struct mt_context *ctx, int state) {
 
     if (state >= STATE_HELO && ctx->ctx_state < STATE_HELO) {
         if (!CHECK_MPOPTS(ctx, SMFIP_NOHELO)) {
-            char   rcmd;
-            size_t buflen;
+            char rcmd;
 
-            buflen = sizeof buf;
+            yaslclear(buf);
+            buf = yaslcpy(buf, DEFCLIENTHOST);
+            buf = yaslcatlen(buf, "\0", 1);
 
-            len = strlcpy(buf, DEFCLIENTHOST, sizeof buf);
-            buf[ len++ ] = '\0';
-
-            if (!mt_milter_write(ctx->ctx_fd, SMFIC_HELO, buf, len)) {
+            if (!mt_milter_write(ctx->ctx_fd, SMFIC_HELO, buf)) {
+                yaslfree(buf);
                 return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if (!CHECK_MPOPTS(ctx, SMFIP_NR_HELO)) {
-                if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+                if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+                    yaslfree(buf);
                     return false;
                 }
 
@@ -638,22 +606,22 @@ mt_assert_state(struct mt_context *ctx, int state) {
 
     if (state >= STATE_ENVFROM && ctx->ctx_state < STATE_ENVFROM) {
         if (!CHECK_MPOPTS(ctx, SMFIP_NOMAIL)) {
-            char   rcmd;
-            size_t buflen;
+            char rcmd;
 
-            buflen = sizeof buf;
+            yaslclear(buf);
+            buf = yaslcpy(buf, DEFSENDER);
+            buf = yaslcatlen(buf, "\0", 1);
 
-            len = strlcpy(buf, DEFSENDER, sizeof buf);
-            buf[ len++ ] = '\0';
-
-            if (!mt_milter_write(ctx->ctx_fd, SMFIC_MAIL, buf, len)) {
+            if (!mt_milter_write(ctx->ctx_fd, SMFIC_MAIL, buf)) {
+                yaslfree(buf);
                 return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if (!CHECK_MPOPTS(ctx, SMFIP_NR_MAIL)) {
-                if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+                if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+                    yaslfree(buf);
                     return false;
                 }
 
@@ -676,22 +644,22 @@ mt_assert_state(struct mt_context *ctx, int state) {
 
     if (state >= STATE_ENVRCPT && ctx->ctx_state < STATE_ENVRCPT) {
         if (!CHECK_MPOPTS(ctx, SMFIP_NORCPT)) {
-            char   rcmd;
-            size_t buflen;
+            char rcmd;
 
-            buflen = sizeof buf;
+            yaslclear(buf);
+            buf = yaslcpy(buf, DEFRECIPIENT);
+            buf = yaslcatlen(buf, "\0", 1);
 
-            len = strlcpy(buf, DEFRECIPIENT, sizeof buf);
-            buf[ len++ ] = '\0';
-
-            if (!mt_milter_write(ctx->ctx_fd, SMFIC_RCPT, buf, len)) {
+            if (!mt_milter_write(ctx->ctx_fd, SMFIC_RCPT, buf)) {
+                yaslfree(buf);
                 return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if ((ctx->ctx_mpopts & SMFIP_NR_RCPT) == 0) {
-                if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+                if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+                    yaslfree(buf);
                     return false;
                 }
 
@@ -715,19 +683,16 @@ mt_assert_state(struct mt_context *ctx, int state) {
     if (state >= STATE_DATA && ctx->ctx_state < STATE_DATA) {
 #ifdef SMFIC_DATA
         if (!CHECK_MPOPTS(ctx, SMFIP_NODATA)) {
-            char   rcmd;
-            size_t buflen;
+            char rcmd;
 
-            buflen = sizeof buf;
-
-            if (!mt_milter_write(ctx->ctx_fd, SMFIC_DATA, NULL, 0)) {
+            if (!mt_milter_write(ctx->ctx_fd, SMFIC_DATA, NULL)) {
                 return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if (!CHECK_MPOPTS(ctx, SMFIP_NR_DATA)) {
-                if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+                if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
                     return false;
                 }
 
@@ -751,24 +716,24 @@ mt_assert_state(struct mt_context *ctx, int state) {
 
     if (state >= STATE_HEADER && ctx->ctx_state < STATE_HEADER) {
         if (!CHECK_MPOPTS(ctx, SMFIP_NOHDRS)) {
-            char   rcmd;
-            size_t buflen;
+            char rcmd;
 
-            buflen = sizeof buf;
+            yaslclear(buf);
+            buf = yaslcpy(buf, DEFHEADERNAME);
+            buf = yaslcatlen(buf, "\0", 1);
+            buf = yaslcat(buf, DEFSENDER);
+            buf = yaslcatlen(buf, "\0", 1);
 
-            len = strlcpy(buf, DEFHEADERNAME, sizeof buf);
-            buf[ len++ ] = '\0';
-            len += strlcpy(buf + len, DEFSENDER, sizeof buf - len);
-            buf[ len++ ] = '\0';
-
-            if (!mt_milter_write(ctx->ctx_fd, SMFIC_HEADER, buf, len)) {
+            if (!mt_milter_write(ctx->ctx_fd, SMFIC_HEADER, buf)) {
+                yaslfree(buf);
                 return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if (!CHECK_MPOPTS(ctx, SMFIP_NR_HDR)) {
-                if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+                if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+                    yaslfree(buf);
                     return false;
                 }
 
@@ -792,19 +757,18 @@ mt_assert_state(struct mt_context *ctx, int state) {
 
     if (state >= STATE_EOH && ctx->ctx_state < STATE_EOH) {
         if (!CHECK_MPOPTS(ctx, SMFIP_NOEOH)) {
-            char   rcmd;
-            size_t buflen;
+            char rcmd;
 
-            buflen = sizeof buf;
-
-            if (!mt_milter_write(ctx->ctx_fd, SMFIC_EOH, NULL, 0)) {
+            if (!mt_milter_write(ctx->ctx_fd, SMFIC_EOH, NULL)) {
+                yaslfree(buf);
                 return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if (!CHECK_MPOPTS(ctx, SMFIP_NR_EOH)) {
-                if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+                if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+                    yaslfree(buf);
                     return false;
                 }
 
@@ -827,20 +791,20 @@ mt_assert_state(struct mt_context *ctx, int state) {
 
     if (state >= STATE_BODY && ctx->ctx_state < STATE_BODY) {
         if (!CHECK_MPOPTS(ctx, SMFIP_NOBODY)) {
-            char   rcmd;
-            size_t buflen;
+            char rcmd;
 
-            buflen = sizeof buf;
-
-            if (!mt_milter_write(
-                        ctx->ctx_fd, SMFIC_BODY, DEFBODY, strlen(DEFBODY))) {
+            yaslclear(buf);
+            buf = yaslcpy(buf, DEFBODY);
+            if (!mt_milter_write(ctx->ctx_fd, SMFIC_BODY, buf)) {
+                yaslfree(buf);
                 return false;
             }
 
             rcmd = SMFIR_CONTINUE;
 
             if (!CHECK_MPOPTS(ctx, SMFIP_NR_BODY)) {
-                if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+                if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+                    yaslfree(buf);
                     return false;
                 }
 
@@ -860,6 +824,8 @@ mt_assert_state(struct mt_context *ctx, int state) {
 
         ctx->ctx_state = STATE_BODY;
     }
+
+    yaslfree(buf);
 
     return true;
 }
@@ -1221,13 +1187,10 @@ mt_connect(lua_State *l) {
 
         memset(&sa, '\0', sizeof sa);
         sa.sun_family = AF_UNIX;
-#ifdef HAVE_SUN_LEN
-        sa.sun_len = sizeof sa;
-#endif /* HAVE_SUN_LEN */
         if (p == NULL) {
-            strlcpy(sa.sun_path, sockinfo, sizeof sa.sun_path);
+            strncpy(sa.sun_path, sockinfo, sizeof(sa.sun_path));
         } else {
-            strlcpy(sa.sun_path, p + 1, sizeof sa.sun_path);
+            strncpy(sa.sun_path, p + 1, sizeof(sa.sun_path));
         }
 
         while (count > 0) {
@@ -1448,7 +1411,7 @@ mt_disconnect(lua_State *l) {
     lua_pop(l, top);
 
     if (polite) {
-        (void)mt_milter_write(ctx->ctx_fd, SMFIC_QUIT, NULL, 0);
+        mt_milter_write(ctx->ctx_fd, SMFIC_QUIT, NULL);
     }
 
     (void)close(ctx->ctx_fd);
@@ -1549,7 +1512,6 @@ mt_test_option(lua_State *l) {
 int
 mt_negotiate(lua_State *l) {
     char               rcmd;
-    size_t             buflen;
     uint32_t           mta_version;
     uint32_t           mta_protoopts;
     uint32_t           mta_actions;
@@ -1557,7 +1519,7 @@ mt_negotiate(lua_State *l) {
     uint32_t           npopts;
     uint32_t           nacts;
     struct mt_context *ctx;
-    char               buf[ BUFRSZ ];
+    yastr              buf;
 
     if (lua_gettop(l) != 4 || !lua_islightuserdata(l, 1) ||
             (!lua_isnil(l, 2) && !lua_isnumber(l, 2)) ||
@@ -1568,8 +1530,6 @@ mt_negotiate(lua_State *l) {
     }
 
     ctx = (struct mt_context *)lua_touserdata(l, 1);
-
-    buflen = sizeof buf;
 
     if (lua_isnumber(l, 2)) {
         mta_version = lua_tonumber(l, 2);
@@ -1595,19 +1555,19 @@ mt_negotiate(lua_State *l) {
     nacts = htonl(mta_actions);
     npopts = htonl(mta_protoopts);
 
-    (void)memcpy(buf, (char *)&nvers, MILTER_LEN_BYTES);
-    (void)memcpy(buf + MILTER_LEN_BYTES, (char *)&nacts, MILTER_LEN_BYTES);
-    (void)memcpy(
-            buf + (MILTER_LEN_BYTES * 2), (char *)&npopts, MILTER_LEN_BYTES);
+    buf = yaslempty();
+    buf = yaslcatlen(buf, &nvers, MILTER_LEN_BYTES);
+    buf = yaslcatlen(buf, &nacts, MILTER_LEN_BYTES);
+    buf = yaslcatlen(buf, &npopts, MILTER_LEN_BYTES);
 
-    if (!mt_milter_write(ctx->ctx_fd, SMFIC_OPTNEG, buf, MILTER_OPTLEN)) {
+    if (!mt_milter_write(ctx->ctx_fd, SMFIC_OPTNEG, buf)) {
+        yaslfree(buf);
         lua_pushstring(l, "mt.milter_write() failed");
         return 1;
     }
 
-    buflen = sizeof buf;
-
-    if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+    if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+        yaslfree(buf);
         lua_pushstring(l, "mt.milter_read() failed");
         return 1;
     }
@@ -1622,6 +1582,7 @@ mt_negotiate(lua_State *l) {
 
         ctx->ctx_state = STATE_DEAD;
 
+        yaslfree(buf);
         lua_pushnil(l);
         return 1;
     }
@@ -1630,9 +1591,9 @@ mt_negotiate(lua_State *l) {
     ctx->ctx_state = STATE_NEGOTIATED;
 
     /* decode and store requested protocol steps and actions */
-    (void)memcpy((char *)&nvers, buf, MILTER_LEN_BYTES);
-    (void)memcpy((char *)&nacts, buf + MILTER_LEN_BYTES, MILTER_LEN_BYTES);
-    (void)memcpy(
+    memcpy((char *)&nvers, buf, MILTER_LEN_BYTES);
+    memcpy((char *)&nacts, buf + MILTER_LEN_BYTES, MILTER_LEN_BYTES);
+    memcpy(
             (char *)&npopts, buf + (MILTER_LEN_BYTES * 2), MILTER_LEN_BYTES);
 
     ctx->ctx_mactions = ntohl(nacts);
@@ -1643,6 +1604,7 @@ mt_negotiate(lua_State *l) {
                 progname, ctx->ctx_fd, rcmd);
     }
 
+    yaslfree(buf);
     lua_pushnil(l);
     return 1;
 }
@@ -1663,12 +1625,10 @@ mt_macro(lua_State *l) {
     int                top;
     int                n = 0;
     int                c;
-    size_t             s;
     struct mt_context *ctx;
-    char              *bp;
     char              *name;
     char              *value;
-    char               buf[ BUFRSZ ];
+    yastr              buf;
 
     assert(l != NULL);
 
@@ -1687,9 +1647,7 @@ mt_macro(lua_State *l) {
         lua_error(l);
     }
 
-    s = 1;
-    buf[ 0 ] = type;
-    bp = buf + 1;
+    buf = yaslnew(&type, 1);
 
     for (c = 3; c < top; c += 2) {
         if (c + 1 > top || !lua_isstring(l, c) || !lua_isstring(l, c + 1)) {
@@ -1701,24 +1659,17 @@ mt_macro(lua_State *l) {
         name = (char *)lua_tostring(l, c);
         value = (char *)lua_tostring(l, c + 1);
 
-        if (strlen(name) + strlen(value) + 2 + bp > buf + sizeof buf) {
-            lua_pop(l, top);
-            lua_pushstring(l, "mt.macro(): Buffer overflow");
-            lua_error(l);
-        }
-
-        memcpy(bp, name, strlen(name) + 1);
-        bp += strlen(name) + 1;
-        memcpy(bp, value, strlen(value) + 1);
-        bp += strlen(value) + 1;
-        s += strlen(name) + 1 + strlen(value) + 1;
+        /* Copy strings including null terminator */
+        buf = yaslcatlen(buf, name, strlen(name) + 1);
+        buf = yaslcatlen(buf, value, strlen(value) + 1);
         n++;
     }
 
     lua_pop(l, top);
 
-    if (!mt_milter_write(ctx->ctx_fd, SMFIC_MACRO, buf, s)) {
+    if (!mt_milter_write(ctx->ctx_fd, SMFIC_MACRO, buf)) {
         lua_pushstring(l, "mt.milter_write() failed");
+        yaslfree(buf);
         return 1;
     }
 
@@ -1727,6 +1678,7 @@ mt_macro(lua_State *l) {
                 type, ctx->ctx_fd);
     }
 
+    yaslfree(buf);
     lua_pushnil(l);
 
     return 1;
@@ -1746,14 +1698,11 @@ int
 mt_conninfo(lua_State *l) {
     char               rcmd;
     char               family = 'U';
-    size_t             buflen;
-    size_t             s;
     uint16_t           port;
     struct mt_context *ctx;
     char              *host;
-    char              *bp;
     char              *ipstr;
-    char               buf[ BUFRSZ ];
+    yastr              buf;
     char               tmp[ BUFRSZ ];
 
     assert(l != NULL);
@@ -1789,7 +1738,6 @@ mt_conninfo(lua_State *l) {
     }
 
     if (ipstr == NULL) {
-#if (HAVE_GETADDRINFO && HAVE_INET_NTOP)
         char                *a = NULL;
         struct addrinfo     *res;
         struct sockaddr_in  *s4;
@@ -1825,23 +1773,7 @@ mt_conninfo(lua_State *l) {
 
         freeaddrinfo(res);
         ipstr = tmp;
-#else  /* HAVE_GETADDRINFO && HAVE_INET_NTOP */
-        struct hostent *h;
-        struct in_addr  sa;
-
-        h = gethostbyname(host);
-        if (h == NULL) {
-            lua_pushfstring(l, "mt.conninfo(): host '%s' unknown", host);
-            lua_error(l);
-        }
-
-        memcpy(&sa.s_addr, h->h_addr, sizeof sa.s_addr);
-        mt_inet_ntoa(sa, tmp, sizeof tmp);
-        ipstr = tmp;
-        family = '4';
-#endif /* HAVE_GETADDRINFO && HAVE_INET_NTOP */
     } else if (strcasecmp(ipstr, "unspec") != 0) {
-#ifdef HAVE_INET_PTON
         struct in_addr  a;
         struct in6_addr a6;
 
@@ -1853,40 +1785,21 @@ mt_conninfo(lua_State *l) {
             lua_pushfstring(l, "mt.conninfo(): invalid IP address '%s'", ipstr);
             lua_error(l);
         }
-#else  /* HAVE_INET_PTON */
-        struct in_addr sa;
-
-        sa.s_addr = inet_addr(ipstr);
-        if (sa.s_addr == INADDR_NONE) {
-            lua_pushfstring(
-                    l, "mt.conninfo(): invalid IPv4 address '%s'", ipstr);
-            lua_error(l);
-        }
-        family = '4';
-#endif /* HAVE_INET_PTON */
     }
 
-    bp = buf;
-    memcpy(bp, host, strlen(host));
-    bp += strlen(host);
-    *bp++ = '\0';
-    memcpy(bp, &family, sizeof family);
-    bp += sizeof family;
-
-    s = strlen(host) + 1 + sizeof(char);
+    buf = yaslempty();
+    buf = yaslcatlen(buf, host, strlen(host) + 1);
+    buf = yaslcatlen(buf, &family, sizeof(family));
 
     if (family != 'U') /* known family data */
     {
         port = htons(DEFCLIENTPORT); /* don't really need this */
-
-        memcpy(bp, &port, sizeof port);
-        bp += sizeof port;
-        memcpy(bp, ipstr, strlen(ipstr) + 1);
-
-        s += sizeof port + strlen(ipstr) + 1;
+        buf = yaslcatlen(buf, &port, sizeof(port));
+        buf = yaslcatlen(buf, ipstr, strlen(ipstr) + 1);
     }
 
-    if (!mt_milter_write(ctx->ctx_fd, SMFIC_CONNECT, buf, s)) {
+    if (!mt_milter_write(ctx->ctx_fd, SMFIC_CONNECT, buf)) {
+        yaslfree(buf);
         lua_pushstring(l, "mt.milter_write() failed");
         return 1;
     }
@@ -1894,7 +1807,8 @@ mt_conninfo(lua_State *l) {
     rcmd = SMFIR_CONTINUE;
 
     if (!CHECK_MPOPTS(ctx, SMFIP_NR_CONN)) {
-        if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+        if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+            yaslfree(buf);
             lua_pushstring(l, "mt.milter_read() failed");
             return 1;
         }
@@ -1908,6 +1822,7 @@ mt_conninfo(lua_State *l) {
                 progname, ctx->ctx_fd, rcmd);
     }
 
+    yaslfree(buf);
     lua_pushnil(l);
 
     return 1;
@@ -1927,12 +1842,9 @@ int
 mt_unknown(lua_State *l) {
 #ifdef SMFIC_UNKNOWN
     char               rcmd;
-    size_t             buflen;
-    size_t             s;
     struct mt_context *ctx;
     char              *cmd;
-    char              *bp;
-    char               buf[ BUFRSZ ];
+    yastr              buf;
 #endif /* SMFIC_UNKNOWN */
 
     assert(l != NULL);
@@ -1960,24 +1872,19 @@ mt_unknown(lua_State *l) {
         lua_error(l);
     }
 
-    s = strlen(cmd) + 1;
+    buf = yaslnew(cmd, strlen(cmd) + 1);
 
-    bp = buf;
-    memcpy(bp, cmd, strlen(cmd));
-    bp += strlen(cmd);
-    *bp++ = '\0';
-
-    if (!mt_milter_write(ctx->ctx_fd, SMFIC_UNKNOWN, buf, s)) {
+    if (!mt_milter_write(ctx->ctx_fd, SMFIC_UNKNOWN, buf)) {
+        yaslfree(buf);
         lua_pushstring(l, "mt.milter_write() failed");
         return 1;
     }
 
-    buflen = sizeof buf;
-
     rcmd = SMFIR_CONTINUE;
 
     if (!CHECK_MPOPTS(ctx, SMFIP_NR_UNKN)) {
-        if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+        if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+            yaslfree(buf);
             lua_pushstring(l, "mt.milter_read() failed");
             return 1;
         }
@@ -1990,6 +1897,7 @@ mt_unknown(lua_State *l) {
                 ctx->ctx_fd, rcmd);
     }
 
+    yaslfree(buf);
     lua_pushnil(l);
 #endif /* ! SMFIC_UNKNOWN */
 
@@ -2009,12 +1917,9 @@ mt_unknown(lua_State *l) {
 int
 mt_helo(lua_State *l) {
     char               rcmd;
-    size_t             buflen;
-    size_t             s;
     struct mt_context *ctx;
     char              *host;
-    char              *bp;
-    char               buf[ BUFRSZ ];
+    yastr              buf;
 
     assert(l != NULL);
 
@@ -2037,24 +1942,19 @@ mt_helo(lua_State *l) {
         lua_error(l);
     }
 
-    s = strlen(host) + 1;
+    buf = yaslnew(host, strlen(host) + 1);
 
-    bp = buf;
-    memcpy(bp, host, strlen(host));
-    bp += strlen(host);
-    *bp++ = '\0';
-
-    if (!mt_milter_write(ctx->ctx_fd, SMFIC_HELO, buf, s)) {
+    if (!mt_milter_write(ctx->ctx_fd, SMFIC_HELO, buf)) {
+        yaslfree(buf);
         lua_pushstring(l, "mt.milter_write() failed");
         return 1;
     }
 
-    buflen = sizeof buf;
-
     rcmd = SMFIR_CONTINUE;
 
     if (!CHECK_MPOPTS(ctx, SMFIP_NR_HELO)) {
-        if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+        if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+            yaslfree(buf);
             lua_pushstring(l, "mt.milter_read() failed");
             return 1;
         }
@@ -2068,6 +1968,7 @@ mt_helo(lua_State *l) {
                 ctx->ctx_fd, rcmd);
     }
 
+    yaslfree(buf);
     lua_pushnil(l);
 
     return 1;
@@ -2087,12 +1988,9 @@ int
 mt_mailfrom(lua_State *l) {
     char               rcmd;
     int                c;
-    size_t             buflen;
-    size_t             s;
     char              *p;
-    char              *bp;
     struct mt_context *ctx;
-    char               buf[ BUFRSZ ];
+    yastr              buf;
 
     assert(l != NULL);
 
@@ -2103,19 +2001,11 @@ mt_mailfrom(lua_State *l) {
 
     ctx = (struct mt_context *)lua_touserdata(l, 1);
 
-    s = 0;
-    bp = buf;
-
+    buf = yaslempty();
     for (c = 2; c <= lua_gettop(l); c++) {
         p = (char *)lua_tostring(l, c);
 
-        s += strlen(p) + 1;
-
-        memcpy(bp, p, strlen(p) + 1);
-
-        bp += strlen(p) + 1;
-
-        /* XXX -- watch for overruns */
+        buf = yaslcatlen(buf, p, strlen(p) + 1);
     }
 
     lua_pop(l, lua_gettop(l));
@@ -2129,17 +2019,17 @@ mt_mailfrom(lua_State *l) {
         lua_error(l);
     }
 
-    if (!mt_milter_write(ctx->ctx_fd, SMFIC_MAIL, buf, s)) {
+    if (!mt_milter_write(ctx->ctx_fd, SMFIC_MAIL, buf)) {
+        yaslfree(buf);
         lua_pushstring(l, "mt.milter_write() failed");
         return 1;
     }
 
-    buflen = sizeof buf;
-
     rcmd = SMFIR_CONTINUE;
 
     if (!CHECK_MPOPTS(ctx, SMFIP_NR_MAIL)) {
-        if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+        if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+            yaslfree(buf);
             lua_pushstring(l, "mt.milter_read() failed");
             return 1;
         }
@@ -2154,6 +2044,7 @@ mt_mailfrom(lua_State *l) {
                 ctx->ctx_fd, rcmd);
     }
 
+    yaslfree(buf);
     lua_pushnil(l);
 
     return 1;
@@ -2173,13 +2064,9 @@ int
 mt_rcptto(lua_State *l) {
     char               rcmd;
     int                c;
-    size_t             buflen;
-    size_t             s;
     char              *p;
-    char              *bp;
-    char              *end;
     struct mt_context *ctx;
-    char               buf[ BUFRSZ ];
+    yastr              buf;
 
     assert(l != NULL);
 
@@ -2190,24 +2077,11 @@ mt_rcptto(lua_State *l) {
 
     ctx = (struct mt_context *)lua_touserdata(l, 1);
 
-    s = 0;
-    bp = buf;
-    end = bp + sizeof buf;
-    memset(buf, '\0', sizeof buf);
-
+    buf = yaslempty();
     for (c = 2; c <= lua_gettop(l); c++) {
         p = (char *)lua_tostring(l, c);
 
-        s += strlen(p) + 1;
-
-        if (bp + strlen(p) >= end) {
-            lua_pushstring(l, "mt.rcptto(): Input overflow");
-            lua_error(l);
-        }
-
-        memcpy(bp, p, strlen(p) + 1);
-
-        bp += strlen(p) + 1;
+        buf = yaslcatlen(buf, p, strlen(p) + 1);
     }
 
     lua_pop(l, lua_gettop(l));
@@ -2221,17 +2095,17 @@ mt_rcptto(lua_State *l) {
         lua_error(l);
     }
 
-    if (!mt_milter_write(ctx->ctx_fd, SMFIC_RCPT, buf, s)) {
+    if (!mt_milter_write(ctx->ctx_fd, SMFIC_RCPT, buf)) {
+        yaslfree(buf);
         lua_pushstring(l, "mt.milter_write() failed");
         return 1;
     }
 
-    buflen = sizeof buf;
-
     rcmd = SMFIR_CONTINUE;
 
     if (!CHECK_MPOPTS(ctx, SMFIP_NR_RCPT)) {
-        if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+        if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+            yaslfree(buf);
             lua_pushstring(l, "mt.milter_read() failed");
             return 1;
         }
@@ -2245,6 +2119,7 @@ mt_rcptto(lua_State *l) {
                 ctx->ctx_fd, rcmd);
     }
 
+    yaslfree(buf);
     lua_pushnil(l);
 
     return 1;
@@ -2264,9 +2139,8 @@ int
 mt_data(lua_State *l) {
 #ifdef SMFIC_DATA
     char               rcmd;
-    size_t             buflen;
     struct mt_context *ctx;
-    char               buf[ BUFRSZ ];
+    yastr              buf;
 #endif /* SMFIC_DATA */
 
     assert(l != NULL);
@@ -2292,20 +2166,21 @@ mt_data(lua_State *l) {
         lua_error(l);
     }
 
-    if (!mt_milter_write(ctx->ctx_fd, SMFIC_DATA, NULL, 0)) {
+    if (!mt_milter_write(ctx->ctx_fd, SMFIC_DATA, NULL)) {
         lua_pushstring(l, "mt.milter_write() failed");
         return 1;
     }
 
-    buflen = sizeof buf;
-
     rcmd = SMFIR_CONTINUE;
 
     if (!CHECK_MPOPTS(ctx, SMFIP_NR_DATA)) {
-        if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+        buf = yaslempty();
+        if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+            yaslfree(buf);
             lua_pushstring(l, "mt.milter_read() failed");
             return 1;
         }
+        yaslfree(buf);
     }
 
     ctx->ctx_response = rcmd;
@@ -2335,13 +2210,10 @@ mt_data(lua_State *l) {
 int
 mt_header(lua_State *l) {
     char               rcmd;
-    size_t             buflen;
-    size_t             s;
-    char              *bp;
     char              *name;
     char              *value;
     struct mt_context *ctx;
-    char               buf[ BUFRSZ ];
+    yastr              buf;
 
     assert(l != NULL);
 
@@ -2356,22 +2228,13 @@ mt_header(lua_State *l) {
     value = (char *)lua_tostring(l, 3);
     lua_pop(l, 3);
 
-    s = strlen(name) + 1 + strlen(value) + 1;
+    buf = yaslnew(name, strlen(name) + 1);
 #ifdef SMFIP_HDR_LEADSPC
     if (CHECK_MPOPTS(ctx, SMFIP_HDR_LEADSPC)) {
-        s++;
+        buf = yaslcat(buf, " ");
     }
 #endif /* SMFIP_HDR_LEADSPC */
-
-    bp = buf;
-    memcpy(buf, name, strlen(name) + 1);
-    bp += strlen(name) + 1;
-#ifdef SMFIP_HDR_LEADSPC
-    if (CHECK_MPOPTS(ctx, SMFIP_HDR_LEADSPC)) {
-        *bp++ = ' ';
-    }
-#endif /* SMFIP_HDR_LEADSPC */
-    memcpy(bp, value, strlen(value) + 1);
+    buf = yaslcatlen(buf, value, strlen(value) + 1);
 
     if (!mt_assert_state(ctx, STATE_DATA)) {
         lua_error(l);
@@ -2382,17 +2245,17 @@ mt_header(lua_State *l) {
         lua_error(l);
     }
 
-    if (!mt_milter_write(ctx->ctx_fd, SMFIC_HEADER, buf, s)) {
+    if (!mt_milter_write(ctx->ctx_fd, SMFIC_HEADER, buf)) {
+        yaslfree(buf);
         lua_pushstring(l, "mt.milter_write() failed");
         return 1;
     }
 
-    buflen = sizeof buf;
-
     rcmd = SMFIR_CONTINUE;
 
     if (!CHECK_MPOPTS(ctx, SMFIP_NR_HDR)) {
-        if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+        if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+            yaslfree(buf);
             lua_pushstring(l, "mt.milter_read() failed");
             return 1;
         }
@@ -2406,6 +2269,7 @@ mt_header(lua_State *l) {
                 ctx->ctx_fd, rcmd);
     }
 
+    yaslfree(buf);
     lua_pushnil(l);
 
     return 1;
@@ -2424,9 +2288,8 @@ mt_header(lua_State *l) {
 int
 mt_eoh(lua_State *l) {
     char               rcmd;
-    size_t             buflen;
     struct mt_context *ctx;
-    char               buf[ BUFRSZ ];
+    yastr              buf;
 
     assert(l != NULL);
 
@@ -2447,20 +2310,21 @@ mt_eoh(lua_State *l) {
         lua_error(l);
     }
 
-    if (!mt_milter_write(ctx->ctx_fd, SMFIC_EOH, NULL, 0)) {
+    if (!mt_milter_write(ctx->ctx_fd, SMFIC_EOH, NULL)) {
         lua_pushstring(l, "mt.milter_write() failed");
         return 1;
     }
 
-    buflen = sizeof buf;
-
     rcmd = SMFIR_CONTINUE;
 
     if (!CHECK_MPOPTS(ctx, SMFIP_NR_EOH)) {
-        if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+        buf = yaslempty();
+        if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+            yaslfree(buf);
             lua_pushstring(l, "mt.milter_read() failed");
             return 1;
         }
+        yaslfree(buf);
     }
 
     ctx->ctx_response = rcmd;
@@ -2489,10 +2353,9 @@ mt_eoh(lua_State *l) {
 int
 mt_bodystring(lua_State *l) {
     char               rcmd;
-    size_t             buflen;
     struct mt_context *ctx;
     char              *str;
-    char               buf[ BUFRSZ ];
+    yastr              buf;
 
     assert(l != NULL);
 
@@ -2515,17 +2378,18 @@ mt_bodystring(lua_State *l) {
         lua_error(l);
     }
 
-    if (!mt_milter_write(ctx->ctx_fd, SMFIC_BODY, str, strlen(str))) {
+    buf = yaslauto(str);
+    if (!mt_milter_write(ctx->ctx_fd, SMFIC_BODY, buf)) {
+        yaslfree(buf);
         lua_pushstring(l, "mt.milter_write() failed");
         return 1;
     }
 
-    buflen = sizeof buf;
-
     rcmd = SMFIR_CONTINUE;
 
     if (!CHECK_MPOPTS(ctx, SMFIP_NR_BODY)) {
-        if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+        if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+            yaslfree(buf);
             lua_pushstring(l, "mt.milter_read() failed");
             return 1;
         }
@@ -2539,6 +2403,7 @@ mt_bodystring(lua_State *l) {
                 progname, strlen(str), ctx->ctx_fd, rcmd);
     }
 
+    yaslfree(buf);
     lua_pushnil(l);
 
     return 1;
@@ -2560,9 +2425,8 @@ mt_bodyrandom(lua_State *l) {
     unsigned long      rw;
     unsigned long      rl;
     int                c;
-    size_t             buflen;
     struct mt_context *ctx;
-    char               buf[ BUFRSZ ];
+    yastr              buf;
 
     assert(l != NULL);
 
@@ -2585,30 +2449,30 @@ mt_bodyrandom(lua_State *l) {
         lua_error(l);
     }
 
+    buf = yaslempty();
     while (rw > 0) {
-        memset(buf, '\0', sizeof buf);
-
-        rl = random() % (sizeof buf - 3);
+        rl = random() % 998; /* max SMTP line length is 1000 including \r\n */
         if (rl > rw) {
             rl = rw;
         }
 
+        yaslclear(buf);
         for (c = 0; c < rl; c++) {
-            buf[ c ] = (random() % 95) + 32;
+            buf = yaslcatprintf(buf, "%c", (char)(random() % 95) + 32);
         }
-        strncat(buf, "\r\n", sizeof buf);
+        buf = yaslcatlen(buf, "\r\n", 2);
 
-        if (!mt_milter_write(ctx->ctx_fd, SMFIC_BODY, buf, strlen(buf))) {
+        if (!mt_milter_write(ctx->ctx_fd, SMFIC_BODY, buf)) {
+            yaslfree(buf);
             lua_pushstring(l, "mt.milter_write() failed");
             return 1;
         }
 
-        buflen = sizeof buf;
-
         rcmd = SMFIR_CONTINUE;
 
         if (!CHECK_MPOPTS(ctx, SMFIP_NR_BODY)) {
-            if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+            if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+                yaslfree(buf);
                 lua_pushstring(l, "mt.milter_read() failed");
                 return 1;
             }
@@ -2620,7 +2484,7 @@ mt_bodyrandom(lua_State *l) {
         if (verbose > 0) {
             fprintf(stdout,
                     "%s: %zu byte(s) of body sent on fd %d, reply '%c'\n",
-                    progname, strlen(buf), ctx->ctx_fd, rcmd);
+                    progname, rl + 2, ctx->ctx_fd, rcmd);
         }
 
         if (rcmd != SMFIR_CONTINUE) {
@@ -2630,6 +2494,7 @@ mt_bodyrandom(lua_State *l) {
         rw -= rl;
     }
 
+    yaslfree(buf);
     lua_pushnil(l);
 
     return 1;
@@ -2652,6 +2517,7 @@ mt_bodyfile(lua_State *l) {
     FILE              *f;
     ssize_t            rlen;
     struct mt_context *ctx;
+    yastr              buf;
     char               chunk[ CHUNKSZ ];
 
     assert(l != NULL);
@@ -2682,25 +2548,26 @@ mt_bodyfile(lua_State *l) {
         lua_error(l);
     }
 
+    buf = yaslempty();
     for (;;) {
-        rlen = fread(chunk, 1, sizeof chunk, f);
+        rlen = fread(chunk, 1, sizeof(chunk), f);
 
         if (rlen > 0) {
-            size_t buflen;
-
-            if (!mt_milter_write(ctx->ctx_fd, SMFIC_BODY, chunk, rlen)) {
+            yaslclear(buf);
+            buf = yaslcpylen(buf, chunk, rlen);
+            if (!mt_milter_write(ctx->ctx_fd, SMFIC_BODY, buf)) {
                 fclose(f);
+                yaslfree(buf);
                 lua_pushstring(l, "mt.milter_write() failed");
                 return 1;
             }
 
-            buflen = sizeof chunk;
-
             rcmd = SMFIR_CONTINUE;
 
             if (!CHECK_MPOPTS(ctx, SMFIP_NR_BODY)) {
-                if (!mt_milter_read(ctx->ctx_fd, &rcmd, chunk, &buflen)) {
+                if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
                     fclose(f);
+                    yaslfree(buf);
                     lua_pushstring(l, "mt.milter_read() failed");
                     return 1;
                 }
@@ -2713,12 +2580,13 @@ mt_bodyfile(lua_State *l) {
             }
         }
 
-        if (rlen < sizeof chunk || rcmd != SMFIR_CONTINUE) {
+        if (rlen < sizeof(chunk) || rcmd != SMFIR_CONTINUE) {
             break;
         }
     }
 
     fclose(f);
+    yaslfree(buf);
 
     ctx->ctx_response = rcmd;
     ctx->ctx_state = STATE_BODY;
@@ -2741,9 +2609,8 @@ mt_bodyfile(lua_State *l) {
 int
 mt_eom(lua_State *l) {
     char               rcmd;
-    size_t             buflen;
     struct mt_context *ctx;
-    char               buf[ BUFRSZ ];
+    yastr              buf;
 
     assert(l != NULL);
 
@@ -2759,17 +2626,18 @@ mt_eom(lua_State *l) {
         lua_error(l);
     }
 
-    if (!mt_milter_write(ctx->ctx_fd, SMFIC_BODYEOB, NULL, 0)) {
+    if (!mt_milter_write(ctx->ctx_fd, SMFIC_BODYEOB, NULL)) {
         lua_pushstring(l, "mt.milter_write() failed");
         return 1;
     }
 
     rcmd = '\0';
 
+    buf = yaslempty();
     for (;;) {
-        buflen = sizeof buf;
 
-        if (!mt_milter_read(ctx->ctx_fd, &rcmd, buf, &buflen)) {
+        if (!mt_milter_read(ctx->ctx_fd, &rcmd, &buf)) {
+            yaslfree(buf);
             lua_pushstring(l, "mt.milter_read() failed");
             return 1;
         }
@@ -2780,7 +2648,8 @@ mt_eom(lua_State *l) {
             break;
         }
 
-        if (!mt_eom_request(ctx, rcmd, buflen, buflen == 0 ? NULL : buf)) {
+        if (!mt_eom_request(ctx, rcmd, yasllen(buf), buf)) {
+            yaslfree(buf);
             lua_pushstring(l, "mt.eom_request() failed");
             return 1;
         }
@@ -2798,6 +2667,7 @@ mt_eom(lua_State *l) {
                 ctx->ctx_fd, rcmd);
     }
 
+    yaslfree(buf);
     lua_pushnil(l);
 
     return 1;
@@ -3259,7 +3129,7 @@ mt_abort(lua_State *l) {
     ctx = (struct mt_context *)lua_touserdata(l, 1);
     lua_pop(l, 1);
 
-    if (!mt_milter_write(ctx->ctx_fd, SMFIC_ABORT, NULL, 0)) {
+    if (!mt_milter_write(ctx->ctx_fd, SMFIC_ABORT, NULL)) {
         lua_pushstring(l, "mt.milter_write() failed");
         return 1;
     }

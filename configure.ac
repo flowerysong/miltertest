@@ -14,7 +14,7 @@ AC_PROG_CC
 m4_version_prereq([2.70], [:], [AC_PROG_CC_C99])
 
 # Check for libraries
-AC_SEARCH_LIBS([inet_ntoa], [nsl])
+AC_SEARCH_LIBS([inet_pton], [nsl])
 PKG_CHECK_MODULES([LIBLUA], [lua])
 AX_CHECK_LIBRARY([LIBMILTER], [libmilter/mfapi.h], [milter], [], [AC_MSG_ERROR([Unable to find libmilter])])
 
