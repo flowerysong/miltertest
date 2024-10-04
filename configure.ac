@@ -1,7 +1,7 @@
 # Copyright (c) Paul Arthur MacIain
 # See COPYING.
 
-AC_INIT(miltertest, 0.1.0, simta@umich.edu)
+AC_INIT(miltertest, 1.0.0, simta@umich.edu)
 AM_INIT_AUTOMAKE([foreign no-dist-gzip dist-xz])
 
 AC_PREREQ(2.63)
