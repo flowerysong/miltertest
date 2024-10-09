@@ -7,7 +7,7 @@
 import unittest, struct
 
 from libmilter import codec
-from libmilter.consts import *
+from libmilter import constants
 
 # This may violate the tenets of (unit)testing, since this is not an
 # exposed interface of the codec module but instead an internal
@@ -179,7 +179,7 @@ class basicTests(unittest.TestCase):
                 continue
             # We can't shorten or grow SMFIC_BODY or
             # SMFIR_REPLYBODY messages.
-            if cmd in (SMFIC_BODY, SMFIR_REPLBODY):
+            if cmd in (constants.SMFIC_BODY, constants.SMFIR_REPLBODY):
                 continue
             r = codec.encode_msg(cmd, **args)
             r = self._changelen(r, -1)
@@ -196,7 +196,7 @@ class basicTests(unittest.TestCase):
         for cmd, args in sample_msgs:
             # We can't shorten or grow SMFIC_BODY or
             # SMFIR_REPLYBODY messages.
-            if cmd in (SMFIC_BODY, SMFIR_REPLBODY):
+            if cmd in (constants.SMFIC_BODY, constants.SMFIR_REPLBODY):
                 continue
             r = codec.encode_msg(cmd, **args)
             # remember: we've got to supply the actual extra
@@ -236,9 +236,9 @@ class basicTests(unittest.TestCase):
     # These test results are from the MTA side of things.
     optneg_tests = (
         ((0x0, 0x0), (0x0, 0x0)),
-        ((0xff, 0xff), (SMFI_V2_ACTS, SMFI_V2_PROT)),
+        ((0xff, 0xff), (constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT)),
         ((0x10, 0x10), (0x10, 0x10)),
-        ((SMFI_V2_ACTS, SMFI_V2_PROT), (SMFI_V2_ACTS, SMFI_V2_PROT)),
+        ((constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT), (constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT)),
         )
     def testOptnegCap(self):
         """Test that optneg_mta_capable correctly masks things."""
@@ -247,10 +247,10 @@ class basicTests(unittest.TestCase):
             self.assertEqual(r, b)
 
     optneg_milter_tests = (
-        ((SMFI_V2_ACTS, SMFI_V2_PROT),
-         (SMFI_V2_ACTS, 0), (SMFI_V2_ACTS, 0)),
-        ((SMFI_V2_ACTS, 0x1ff),
-         (SMFI_V2_ACTS, 0), (SMFI_V2_ACTS, 0x180)),
+        ((constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT),
+         (constants.SMFI_V2_ACTS, 0), (constants.SMFI_V2_ACTS, 0)),
+        ((constants.SMFI_V2_ACTS, 0x1ff),
+         (constants.SMFI_V2_ACTS, 0), (constants.SMFI_V2_ACTS, 0x180)),
         )
     def testOptnegMilterCap(self):
         """Test that optneg_milter_capable correctly masks things."""
@@ -266,7 +266,7 @@ class basicTests(unittest.TestCase):
             r = codec.encode_optneg(actions=a[0], protocol=a[1])
             rcmd, rdict, data = codec.decode_msg(r)
             self.assertEqual(data, '')
-            self.assertEqual(rcmd, SMFIC_OPTNEG)
+            self.assertEqual(rcmd, constants.SMFIC_OPTNEG)
             rpair = (rdict['actions'], rdict['protocol'])
             self.assertEqual(rpair, b)
 
@@ -277,7 +277,7 @@ class basicTests(unittest.TestCase):
         r = codec.encode_optneg(actions=0xff, protocol=0x180,
                     is_milter = True)
         rcmd, rdict, data = codec.decode_msg(r)
-        self.assertEqual(rdict['actions'], SMFI_V2_ACTS)
+        self.assertEqual(rdict['actions'], constants.SMFI_V2_ACTS)
         self.assertEqual(rdict['protocol'], 0x180)
 
 if __name__ == "__main__":

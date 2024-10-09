@@ -9,8 +9,8 @@
 import unittest
 
 from libmilter import codec
+from libmilter import constants
 from libmilter import convo
-from libmilter.consts import *
 
 class ConvError(Exception):
     pass
@@ -65,7 +65,7 @@ class FakeSocket(object):
         """Add an expected write command and then a SMFIR_CONTINUE
         reply to it."""
         self._add(WRITE, (cmd,))
-        self.addReadMsg(SMFIR_CONTINUE)
+        self.addReadMsg(constants.SMFIR_CONTINUE)
 
     def isEmpty(self):
         """Returns whether or not all expected reads and writes
@@ -106,7 +106,7 @@ class basicTests(unittest.TestCase):
     def testShortReads(self):
         """Test that we correctly read multiple times to reassemble
         a short message, and that we get the right answer."""
-        ams = SMFIC_CONNECT
+        ams = constants.SMFIC_CONNECT
         adict = { 'hostname': 'localhost',
               'family': '4',
               'port': 1678,
@@ -126,13 +126,13 @@ class basicTests(unittest.TestCase):
         """Test that we correctly read multiple progress messages
         before getting the real one."""
         s = FakeSocket()
-        s.addReadMsg(SMFIR_PROGRESS)
-        s.addReadMsg(SMFIR_PROGRESS)
-        s.addReadMsg(SMFIR_PROGRESS)
-        s.addReadMsg(SMFIR_DELRCPT, rcpt=["<a@b.c>",])
+        s.addReadMsg(constants.SMFIR_PROGRESS)
+        s.addReadMsg(constants.SMFIR_PROGRESS)
+        s.addReadMsg(constants.SMFIR_PROGRESS)
+        s.addReadMsg(constants.SMFIR_DELRCPT, rcpt=["<a@b.c>",])
         mbuf = convo.BufferedMilter(s)
         rcmd, rdict = mbuf.get_real_msg()
-        self.assertEqual(rcmd, SMFIR_DELRCPT)
+        self.assertEqual(rcmd, constants.SMFIR_DELRCPT)
         self.assertTrue(s.isEmpty())
 
 class continuedTests(unittest.TestCase):
@@ -142,10 +142,10 @@ class continuedTests(unittest.TestCase):
         s = FakeSocket()
         hdrs = (('From', 'Chris'), ('To', 'Simon'), ('Subject', 'Yak'))
         for _ in hdrs:
-            s.addMTAWrite(SMFIC_HEADER)
+            s.addMTAWrite(constants.SMFIC_HEADER)
         mbuf = convo.BufferedMilter(s)
         rcmd, rdict = mbuf.send_headers(hdrs)
-        self.assertEqual(rcmd, SMFIR_CONTINUE)
+        self.assertEqual(rcmd, constants.SMFIR_CONTINUE)
         self.assertTrue(s.isEmpty())
 
     def testShortHeaders(self):
@@ -153,66 +153,66 @@ class continuedTests(unittest.TestCase):
         if SMFIR_CONTINUE is not the code returned."""
         s = FakeSocket()
         hdrs = (('From', 'Chris'), ('To', 'Simon'), ('Subject', 'Yak'))
-        s.addMTAWrite(SMFIC_HEADER)
-        s.addWrite(SMFIC_HEADER)
-        s.addReadMsg(SMFIR_ACCEPT)
+        s.addMTAWrite(constants.SMFIC_HEADER)
+        s.addWrite(constants.SMFIC_HEADER)
+        s.addReadMsg(constants.SMFIR_ACCEPT)
         rcmd, rdict = convo.BufferedMilter(s).send_headers(hdrs)
-        self.assertEqual(rcmd, SMFIR_ACCEPT)
+        self.assertEqual(rcmd, constants.SMFIR_ACCEPT)
         self.assertTrue(s.isEmpty())
 
     def testBodySequence(self):
         """Test that we handle writing a large body in the way
         we expect."""
         s = FakeSocket()
-        body = ('*' * MILTER_CHUNK_SIZE) * 3
-        s.addMTAWrite(SMFIC_BODY)
-        s.addMTAWrite(SMFIC_BODY)
-        s.addMTAWrite(SMFIC_BODY)
+        body = ('*' * constants.MILTER_CHUNK_SIZE) * 3
+        s.addMTAWrite(constants.SMFIC_BODY)
+        s.addMTAWrite(constants.SMFIC_BODY)
+        s.addMTAWrite(constants.SMFIC_BODY)
         mbuf = convo.BufferedMilter(s)
         rcmd, rdict = mbuf.send_body(body)
-        self.assertEqual(rcmd, SMFIR_CONTINUE)
+        self.assertEqual(rcmd, constants.SMFIR_CONTINUE)
         self.assertTrue(s.isEmpty())
 
     def testShortBody(self):
         """Test that we return early from a series of body writes
         if SMFIR_CONTINUE is not the code returned."""
         s = FakeSocket()
-        body = ('*' * MILTER_CHUNK_SIZE) * 3
-        s.addMTAWrite(SMFIC_BODY)
-        s.addWrite(SMFIC_BODY)
-        s.addReadMsg(SMFIR_ACCEPT)
+        body = ('*' * constants.MILTER_CHUNK_SIZE) * 3
+        s.addMTAWrite(constants.SMFIC_BODY)
+        s.addWrite(constants.SMFIC_BODY)
+        s.addReadMsg(constants.SMFIR_ACCEPT)
         rcmd, rdict = convo.BufferedMilter(s).send_body(body)
-        self.assertEqual(rcmd, SMFIR_ACCEPT)
+        self.assertEqual(rcmd, constants.SMFIR_ACCEPT)
         self.assertTrue(s.isEmpty())
 
     optneg_mta_pairs = (
-        ((SMFI_V2_ACTS, SMFI_V2_PROT), (SMFI_V2_ACTS, SMFI_V2_PROT)),
+        ((constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT), (constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT)),
         ((0x10, 0x10), (0x10, 0x10)),
-        ((0xff, 0xff), (SMFI_V2_ACTS, SMFI_V2_PROT)),
+        ((0xff, 0xff), (constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT)),
         )
     def testMTAOptneg(self):
         """Test that the MTA version of option negotiation returns
         what we expect it to."""
         for a, b in self.optneg_mta_pairs:
             s = FakeSocket()
-            s.addWrite(SMFIC_OPTNEG)
-            s.addReadMsg(SMFIC_OPTNEG, version=MILTER_VERSION,
+            s.addWrite(constants.SMFIC_OPTNEG)
+            s.addReadMsg(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION,
                      actions=a[0], protocol=a[1])
             # strict=True would blow up on the last test.
             ract, rprot = convo.BufferedMilter(s).optneg_mta(strict=False)
             self.assertEqual(ract, b[0])
             self.assertEqual(rprot, b[1])
 
-    optneg_exc_errors = ((SMFI_V2_ACTS, 0xff),
-                 (0xff, SMFI_V2_PROT),
+    optneg_exc_errors = ((constants.SMFI_V2_ACTS, 0xff),
+                 (0xff, constants.SMFI_V2_PROT),
                  (0xff, 0xff),)
     def testMilterONOutside(self):
         """Test that the MTA version of option negotiation errors
         out if there are excess bits in the milter reply."""
         for act, prot in self.optneg_exc_errors:
             s = FakeSocket()
-            s.addWrite(SMFIC_OPTNEG)
-            s.addReadMsg(SMFIC_OPTNEG, version=MILTER_VERSION,
+            s.addWrite(constants.SMFIC_OPTNEG)
+            s.addReadMsg(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION,
                      actions=act, protocol=prot)
             bm = convo.BufferedMilter(s)
             self.assertRaises(convo.MilterConvoError,
@@ -222,21 +222,29 @@ class continuedTests(unittest.TestCase):
         # The basic case; MTA says all V2 actions, all V2 protocol
         # exclusions, we say we'll take all actions and we want the
         # MTA not to exclude any protocol steps.
-        ((SMFI_V2_ACTS, SMFI_V2_PROT), (SMFI_V2_ACTS, 0x0)),
+        ((constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT), (constants.SMFI_V2_ACTS, 0x0)),
         # MTA offers additional protocol exclusions, we tell it not
         # to do them but to do all V2 protocol actions.
-        ((SMFI_V2_ACTS, 0x1ff), (SMFI_V2_ACTS, 0x180)),
+        ((constants.SMFI_V2_ACTS, 0x1ff), (constants.SMFI_V2_ACTS, 0x180)),
         # MTA offers additional actions, we decline.
-        ((0xffff, SMFI_V2_PROT), (SMFI_V2_ACTS, 0x00)),
+        ((0xffff, constants.SMFI_V2_PROT), (constants.SMFI_V2_ACTS, 0x00)),
         )
     def testMilterOptneg(self):
         """Test the milter version of option negotiation."""
         for a, b in self.optneg_milter_pairs:
             s = FakeSocket()
-            s.addReadMsg(SMFIC_OPTNEG, version=MILTER_VERSION,
-                     actions=a[0], protocol=a[1])
-            s.addFullWrite(SMFIC_OPTNEG, version=MILTER_VERSION,
-                       actions=b[0], protocol=b[1])
+            s.addReadMsg(
+                constants.SMFIC_OPTNEG,
+                version=constants.MILTER_VERSION,
+                actions=a[0],
+                protocol=a[1]
+            )
+            s.addFullWrite(
+                constants.SMFIC_OPTNEG,
+                version=constants.MILTER_VERSION,
+                actions=b[0],
+                protocol=b[1]
+            )
             ract, rprot = convo.BufferedMilter(s).optneg_milter()
             self.assertEqual(ract, b[0])
             self.assertEqual(rprot, b[1])

@@ -9,7 +9,7 @@
 import struct
 
 # Milter constants
-from .consts import *
+from . import constants
 
 __doc__ = """Encode and decode the sendmail milter protocol.
 
@@ -53,46 +53,46 @@ class MilterNotEnough(MilterProtoError):
 # is no requirement that the chunks be large).
 #
 codec = {
-    SMFIC_ABORT: (),
-    SMFIC_BODY: (('buf', 'buf'),),
-    SMFIC_CONNECT: (('hostname', 'str'),
+    constants.SMFIC_ABORT: (),
+    constants.SMFIC_BODY: (('buf', 'buf'),),
+    constants.SMFIC_CONNECT: (('hostname', 'str'),
             ('family', 'char'),
             ('port', 'u16'),
             ('address', 'str'),),
-    SMFIC_MACRO: (('cmdcode', 'char'),
+    constants.SMFIC_MACRO: (('cmdcode', 'char'),
               ('nameval', 'strpairs')),
-    SMFIC_BODYEOB: (),
-    SMFIC_HELO: (('helo', 'str'),),
-    SMFIC_HEADER: (('name', 'str'), ('value', 'str')),
-    SMFIC_MAIL: (('args', 'strs'),),
-    SMFIC_EOH: (),
+    constants.SMFIC_BODYEOB: (),
+    constants.SMFIC_HELO: (('helo', 'str'),),
+    constants.SMFIC_HEADER: (('name', 'str'), ('value', 'str')),
+    constants.SMFIC_MAIL: (('args', 'strs'),),
+    constants.SMFIC_EOH: (),
     # It might be nice to decode bits for people, but that's too much
     # work for now.
-    SMFIC_OPTNEG: (('version', 'u32'),
+    constants.SMFIC_OPTNEG: (('version', 'u32'),
                ('actions', 'u32'),
                ('protocol', 'u32'),),
-    SMFIC_RCPT: (('args', 'strs'),),
-    SMFIC_QUIT: (),
+    constants.SMFIC_RCPT: (('args', 'strs'),),
+    constants.SMFIC_QUIT: (),
 
     # Responses.
-    SMFIR_ADDRCPT: (('rcpt', 'str'),),
-    SMFIR_DELRCPT: (('rcpt', 'str'),),
-    SMFIR_ACCEPT: (),
-    SMFIR_REPLBODY: (('buf', 'buf'),),
-    SMFIR_CONTINUE: (),
-    SMFIR_DISCARD: (),
-    SMFIR_ADDHEADER: (('name', 'str'), ('value', 'str')),
-    SMFIR_CHGHEADER: (('index', 'u32'), ('name', 'str'), ('value', 'str')),
-    SMFIR_PROGRESS: (),
-    SMFIR_QUARANTINE: (('reason', 'str'),),
-    SMFIR_REJECT: (),
-    SMFIR_TEMPFAIL: (),
+    constants.SMFIR_ADDRCPT: (('rcpt', 'str'),),
+    constants.SMFIR_DELRCPT: (('rcpt', 'str'),),
+    constants.SMFIR_ACCEPT: (),
+    constants.SMFIR_REPLBODY: (('buf', 'buf'),),
+    constants.SMFIR_CONTINUE: (),
+    constants.SMFIR_DISCARD: (),
+    constants.SMFIR_ADDHEADER: (('name', 'str'), ('value', 'str')),
+    constants.SMFIR_CHGHEADER: (('index', 'u32'), ('name', 'str'), ('value', 'str')),
+    constants.SMFIR_PROGRESS: (),
+    constants.SMFIR_QUARANTINE: (('reason', 'str'),),
+    constants.SMFIR_REJECT: (),
+    constants.SMFIR_TEMPFAIL: (),
     # It is kind of lame that we force people to explicitly encode
     # the space field (with a ' ', to be spec-compliant). But doing
     # a nicer version requires building an encoding/decoding system
     # that knows about padding fields, just for this one field in one
     # message.
-    SMFIR_REPLYCODE: (('smtpcode', 'char3'),
+    constants.SMFIR_REPLYCODE: (('smtpcode', 'char3'),
               ('space', 'char'),
               ('text', 'str'),),
     # SMFIC_OPTNEG is also a valid response.
@@ -319,16 +319,16 @@ def decode_msg(data):
 def optneg_mta_capable(actions, protocol):
     """Return a bitmask of actions and protocols that milter.codec
     can support."""
-    return (actions & SMFI_V2_ACTS, protocol & SMFI_V2_PROT)
+    return (actions & constants.SMFI_V2_ACTS, protocol & constants.SMFI_V2_PROT)
 def optneg_milter_capable(ractions, rprotocol,
-              actions=SMFI_V2_ACTS, protocol=0x0):
+              actions=constants.SMFI_V2_ACTS, protocol=0x0):
     """Given an MTA's actions and protocol, and our actions and
     protocol, return an (actions, protocol) tuple suitable for
     use in a SMFIC_OPTNEG reply. Since our protocol is the steps
     we wish the MTA to exclude, it will often be zero."""
-    actions = actions & SMFI_V2_ACTS
+    actions = actions & constants.SMFI_V2_ACTS
     oactions = ractions & actions
-    pmask = protocol | (0xfffffff ^ SMFI_V2_PROT)
+    pmask = protocol | (0xfffffff ^ constants.SMFI_V2_PROT)
     oprotocol = rprotocol & pmask
     return (oactions, oprotocol)
 
@@ -339,10 +339,10 @@ def encode_optneg(actions, protocol, is_milter=False):
     optneg_milter_capable()    depending on which side of the protocol
     you are implementing."""
     # We never encode any actions beyond what we support.
-    actions = actions & SMFI_V2_ACTS
+    actions = actions & constants.SMFI_V2_ACTS
     # Unless we are handling the milter side of the protocol,
     # clamp the protocol bitmask to what we support.
     if not is_milter:
-        protocol = protocol & SMFI_V2_PROT
-    return encode_msg(SMFIC_OPTNEG, version=MILTER_VERSION,
+        protocol = protocol & constants.SMFI_V2_PROT
+    return encode_msg(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION,
               actions=actions, protocol=protocol)
