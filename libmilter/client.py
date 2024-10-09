@@ -13,8 +13,8 @@ from . import constants
 __all__ = [
     'MilterConnection',
     'MilterError',
-    'accept_reject_replies',
-    'bodyeob_replies',
+    'DISPOSITION_REPLIES',
+    'EOM_REPLIES',
 ]
 
 
@@ -23,8 +23,7 @@ class MilterError(Exception):
 
 
 # Specific command sets:
-# accept/reject actions
-accept_reject_replies = frozenset(
+DISPOSITION_REPLIES = frozenset(
     [
         constants.SMFIR_ACCEPT,
         constants.SMFIR_CONTINUE,
@@ -32,18 +31,21 @@ accept_reject_replies = frozenset(
         constants.SMFIR_TEMPFAIL,
         constants.SMFIR_REPLYCODE,
         constants.SMFIR_DISCARD,
+        constants.SMFIR_QUARANTINE,
     ]
 )
 
-# actions valid after BODYEOB
-bodyeob_replies = frozenset(
+EOM_REPLIES = frozenset(
     [
-        *accept_reject_replies,
-        constants.SMFIR_ADDHEADER,
-        constants.SMFIR_CHGHEADER,
-        constants.SMFIR_REPLBODY,
+        *DISPOSITION_REPLIES,
         constants.SMFIR_ADDRCPT,
         constants.SMFIR_DELRCPT,
+        constants.SMFIR_ADDRCPT_PAR,
+        constants.SMFIR_REPLBODY,
+        constants.SMFIR_CHGFROM,
+        constants.SMFIR_ADDHEADER,
+        constants.SMFIR_INSHEADER,
+        constants.SMFIR_CHGHEADER,
     ]
 )
 
@@ -138,7 +140,7 @@ class MilterConnection:
     def send_ar(self, cmd, **args):
         """Send a message and then wait for a real reply message
         that is from the accept/reject set."""
-        return self.send_get_specific(accept_reject_replies, cmd, **args)
+        return self.send_get_specific(DISPOSITION_REPLIES, cmd, **args)
 
     def send_body(self, body):
         """Send the body of a message, properly chunked and
@@ -175,7 +177,7 @@ class MilterConnection:
         while True:
             msg = self.get_real_msg()
             res.append(msg)
-            if msg[0] in accept_reject_replies:
+            if msg[0] in DISPOSITION_REPLIES:
                 return res
 
     # Option negotiation from the MTA and milter view.
