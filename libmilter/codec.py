@@ -2,14 +2,15 @@
 # Copyright 2024 Paul Arthur MacIain
 # GNU General Public License v3.0 (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
-# Encode and decode the milter protocol.
-# This does not do any network conversation; it simply takes data buffers
-# and decodes them to milter messages or encodes milter messages into a
-# binary string.
-#
+"""Encode and decode the milter protocol.
+
+This does not do any network conversation; it simply takes data
+buffers and decodes them to milter messages or encodes milter messages
+into a binary string.
+"""
+
 import struct
 
-# Milter constants
 from . import constants
 
 __all__ = [
@@ -188,10 +189,14 @@ def encode_chr3(val):
 
 
 def unpack_n(data, fmt):
-    """Unpack a single struct module format item from data, returning
-    the unpacked item and the remaining data. Raises MilterNotEnough
+    """Unpack a single struct module format item from data
+
+    Returns the unpacked item and the remaining data.
+
+    Raises MilterNotEnough
     if there is too little data to contain the item (eg, 3 bytes of
-    data when we are decoding a 32-bit unsigned integer)."""
+    data when we are decoding a 32-bit unsigned integer).
+    """
     nbytes = struct.calcsize(fmt)
     if len(data) < nbytes:
         raise MilterNotEnough('too little data')
