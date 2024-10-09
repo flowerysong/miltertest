@@ -9,6 +9,12 @@
 MILTER_VERSION      = 2         # Milter version we claim to speak
 MILTER_CHUNK_SIZE   = 65535     # How large a SMFIC_BODY body can be
 
+# Address families
+SMFIA_UNKNOWN   = 'U'
+SMFIA_UNIX      = 'L'
+SMFIA_INET      = '4'
+SMFIA_INET6     = '6'
+
 # Commands
 SMFIC_ABORT     = 'A'
 SMFIC_BODY      = 'B'   # body chunk
@@ -35,6 +41,15 @@ SMFIF_QUARANTINE    = 0x0020
 SMFIF_CHGFROM       = 0x0040    # change envelope sender
 SMFIF_ADDRCPT_PAR   = 0x0080    # add recipients including arguments
 SMFIF_SETSYMLIST    = 0x0100    # send set of symbols that it wants
+
+# Macro places
+SMFIM_CONNECT   = 0     # connect
+SMFIM_HELO      = 1     # HELO/EHLO
+SMFIM_ENVFROM   = 2     # MAIL FROM
+SMFIM_ENVRCPT   = 3     # RCPT TO
+SMFIM_DATA      = 4     # DATA
+SMFIM_EOM       = 5     # end of message
+SMFIM_EOH       = 6     # end of header
 
 # bitmask of actions supported in each protocol version
 SMFI_V1_ACTS = 0x000f
