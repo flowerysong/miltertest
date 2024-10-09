@@ -27,22 +27,33 @@ __all__ = [
     'optneg_mta_capable',
 ]
 
+
 # (Public) exceptions
 class MilterProtoError(Exception):
     """General encoding or decoding failure."""
+
     pass
+
+
 class MilterIncomplete(MilterProtoError):
     """The data buffer passed for decoding needs more data."""
+
     pass
+
+
 class MilterDecodeError(MilterProtoError):
     """The milter packet we are trying to decode is malformed."""
+
     pass
+
 
 # This is effectively an internal exception; it is turned into either
 # MilterIncomplete or MilterDecodeError.
 class MilterNotEnough(MilterProtoError):
     """Not enough data to finish decoding."""
+
     pass
+
 
 # This maps milter commands and responses to the data structures that
 # they use. The value is a tuple of (fieldname, fieldtype) tuples, in
@@ -63,12 +74,13 @@ class MilterNotEnough(MilterProtoError):
 codec = {
     constants.SMFIC_ABORT: (),
     constants.SMFIC_BODY: (('buf', 'buf'),),
-    constants.SMFIC_CONNECT: (('hostname', 'str'),
-            ('family', 'char'),
-            ('port', 'u16'),
-            ('address', 'str'),),
-    constants.SMFIC_MACRO: (('cmdcode', 'char'),
-              ('nameval', 'strpairs')),
+    constants.SMFIC_CONNECT: (
+        ('hostname', 'str'),
+        ('family', 'char'),
+        ('port', 'u16'),
+        ('address', 'str'),
+    ),
+    constants.SMFIC_MACRO: (('cmdcode', 'char'), ('nameval', 'strpairs')),
     constants.SMFIC_BODYEOB: (),
     constants.SMFIC_HELO: (('helo', 'str'),),
     constants.SMFIC_HEADER: (('name', 'str'), ('value', 'str')),
@@ -76,12 +88,13 @@ codec = {
     constants.SMFIC_EOH: (),
     # It might be nice to decode bits for people, but that's too much
     # work for now.
-    constants.SMFIC_OPTNEG: (('version', 'u32'),
-               ('actions', 'u32'),
-               ('protocol', 'u32'),),
+    constants.SMFIC_OPTNEG: (
+        ('version', 'u32'),
+        ('actions', 'u32'),
+        ('protocol', 'u32'),
+    ),
     constants.SMFIC_RCPT: (('args', 'strs'),),
     constants.SMFIC_QUIT: (),
-
     # Responses.
     constants.SMFIR_ADDRCPT: (('rcpt', 'str'),),
     constants.SMFIR_DELRCPT: (('rcpt', 'str'),),
@@ -100,13 +113,15 @@ codec = {
     # a nicer version requires building an encoding/decoding system
     # that knows about padding fields, just for this one field in one
     # message.
-    constants.SMFIR_REPLYCODE: (('smtpcode', 'char3'),
-              ('space', 'char'),
-              ('text', 'str'),),
+    constants.SMFIR_REPLYCODE: (
+        ('smtpcode', 'char3'),
+        ('space', 'char'),
+        ('text', 'str'),
+    ),
     # SMFIC_OPTNEG is also a valid response.
-    }
+}
 
-#----
+# ----
 # Encoders and decoders for all of the different types we know about.
 #
 # Content constraints:
@@ -126,37 +141,46 @@ codec = {
 # (Because the 'strs' encoder and decoder are also used by strpairs, they
 # take a private argument to control this behavior.)
 
+
 # Encoders take a value and return that value encoded as a binary string.
 def encode_buf(val):
     return val.encode()
 
+
 def encode_str(val):
     return f'{val}\0'.encode()
 
-def encode_strs(val, empty_ok = False):
+
+def encode_strs(val, empty_ok=False):
     if len(val) == 0 and not empty_ok:
         # See comment above for why this is justified.
         raise MilterProtoError('empty string array')
     return b''.join(encode_str(x) for x in val)
 
+
 def encode_strpairs(val):
     if len(val) % 2 != 0:
-        raise MilterProtoError("uneven number of name/value pairs")
-    return encode_strs(val, empty_ok = True)
+        raise MilterProtoError('uneven number of name/value pairs')
+    return encode_strs(val, empty_ok=True)
+
 
 def encode_chr(val):
     return struct.pack('c', val.encode())
 
+
 def encode_u16(val):
     return struct.pack('!H', val)
+
 
 def encode_u32(val):
     return struct.pack('!L', val)
 
+
 def encode_chr3(val):
     if len(val) != 3:
-        raise MilterProtoError("mis-sized char3")
+        raise MilterProtoError('mis-sized char3')
     return struct.pack('3s', val.encode())
+
 
 ##
 # decoding.
@@ -165,6 +189,7 @@ def encode_chr3(val):
 # remaining data. If they have completely consumed the data, the
 # remaining buffer is ''.
 
+
 def unpack_n(data, fmt):
     """Unpack a single struct module format item from data, returning
     the unpacked item and the remaining data. Raises MilterNotEnough
@@ -172,50 +197,59 @@ def unpack_n(data, fmt):
     data when we are decoding a 32-bit unsigned integer)."""
     nbytes = struct.calcsize(fmt)
     if len(data) < nbytes:
-        raise MilterNotEnough("too little data")
+        raise MilterNotEnough('too little data')
     return (struct.unpack(fmt, data[:nbytes])[0], data[nbytes:])
+
 
 def decode_chr(data):
     ret = unpack_n(data, 'c')
     return (ret[0].decode(), ret[1])
 
+
 def decode_chr3(data):
     ret = unpack_n(data, '3s')
     return (ret[0].decode(), ret[1])
 
+
 def decode_u16(data):
     return unpack_n(data, '!H')
+
 
 def decode_u32(data):
     return unpack_n(data, '!L')
 
+
 def decode_str(data):
     r = data.split(b'\0', 1)
     if len(r) != 2:
-        raise MilterNotEnough("short string")
+        raise MilterNotEnough('short string')
     return (r[0].decode(), r[1])
+
 
 # A buffer necessarily consumes all remaining data, since it has no
 # terminator.
 def decode_buf(data):
     return data.decode(), b''
 
+
 # A string array consumes the rest of the data.
-def decode_strs(data, empty_ok = False):
+def decode_strs(data, empty_ok=False):
     r = []
     while data:
         s, data = decode_str(data)
         r.append(s)
     if not empty_ok and not r:
         # See comment above for why this is justified.
-        raise MilterNotEnough("no strings in string array")
+        raise MilterNotEnough('no strings in string array')
     return r, b''
 
+
 def decode_strpairs(data):
-    r, data = decode_strs(data, empty_ok = True)
+    r, data = decode_strs(data, empty_ok=True)
     if len(r) % 2 != 0:
-        raise MilterNotEnough("uneven string pairs")
+        raise MilterNotEnough('uneven string pairs')
     return r, data
+
 
 codectypes = {
     'buf': (encode_buf, decode_buf),
@@ -236,6 +270,7 @@ def encode(ctype, val):
 def decode(ctype, data):
     return codectypes[ctype][1](data)
 
+
 # A milter message itself is:
 #    uint32 len
 #    char   cmd
@@ -252,12 +287,13 @@ def encode_msg(cmd, **kwargs):
     parms = set([x[0] for x in parmlst])
     uparms = set(kwargs.keys())
     if parms != uparms:
-        raise MilterProtoError("encode: parameter mismatch")
+        raise MilterProtoError('encode: parameter mismatch')
     data = []
     for name, ctype in parmlst:
         data.append(encode(ctype, kwargs[name]))
     dstr = b''.join(data)
     return struct.pack('!Lc', len(dstr) + 1, cmd.encode()) + dstr
+
 
 def decode_msg(data):
     """Decode data into a milter message.
@@ -275,7 +311,7 @@ def decode_msg(data):
     try:
         mlen, data = decode_u32(data)
         if mlen == 0:
-            raise MilterDecodeError("zero-length message")
+            raise MilterDecodeError('zero-length message')
         cmd, data = decode_chr(data)
     except MilterNotEnough:
         raise MilterIncomplete('Need more data') from None
@@ -283,9 +319,9 @@ def decode_msg(data):
         raise MilterDecodeError(f'decode: unknown command {cmd}')
     # The rest of the packet is len-1 bytes long, so if we have less
     # data than that we need more.
-    dlen = mlen-1
+    dlen = mlen - 1
     if len(data) < dlen:
-        raise MilterIncomplete("need more data")
+        raise MilterIncomplete('need more data')
 
     # From now onwards, a decoder raising MilterNotEnough means
     # that the structure inside the message packet was truncated or
@@ -302,8 +338,9 @@ def decode_msg(data):
     # extra, un-consumed data after the data we expected. This is a fatal
     # encoding error.
     if len(buf) > 0:
-        raise MilterDecodeError("decode: packet too long. packet type: '%s', len %d, remaining: %s raw %s" % (cmd, mlen, repr(buf), repr(rawdata[:mlen+4])))
+        raise MilterDecodeError(f'Packet contents for {cmd} too long: {mlen} / {buf} / {rawdata[: mlen + 4]}')
     return (cmd, rstruct, rest)
+
 
 # Option negotiation is somewhat complex.
 # First, we can't claim to support things that this module can't handle.
@@ -326,17 +363,19 @@ def optneg_mta_capable(actions, protocol):
     """Return a bitmask of actions and protocols that milter.codec
     can support."""
     return (actions & constants.SMFI_V2_ACTS, protocol & constants.SMFI_V2_PROT)
-def optneg_milter_capable(ractions, rprotocol,
-              actions=constants.SMFI_V2_ACTS, protocol=0x0):
+
+
+def optneg_milter_capable(ractions, rprotocol, actions=constants.SMFI_V2_ACTS, protocol=0x0):
     """Given an MTA's actions and protocol, and our actions and
     protocol, return an (actions, protocol) tuple suitable for
     use in a SMFIC_OPTNEG reply. Since our protocol is the steps
     we wish the MTA to exclude, it will often be zero."""
     actions = actions & constants.SMFI_V2_ACTS
     oactions = ractions & actions
-    pmask = protocol | (0xfffffff ^ constants.SMFI_V2_PROT)
+    pmask = protocol | (0xFFFFFFF ^ constants.SMFI_V2_PROT)
     oprotocol = rprotocol & pmask
     return (oactions, oprotocol)
+
 
 def encode_optneg(actions, protocol, is_milter=False):
     """Encode a SMFIC_OPTNEG message based on the supplied actions
@@ -350,5 +389,4 @@ def encode_optneg(actions, protocol, is_milter=False):
     # clamp the protocol bitmask to what we support.
     if not is_milter:
         protocol = protocol & constants.SMFI_V2_PROT
-    return encode_msg(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION,
-              actions=actions, protocol=protocol)
+    return encode_msg(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION, actions=actions, protocol=protocol)

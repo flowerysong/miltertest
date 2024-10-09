@@ -17,9 +17,11 @@ __all__ = [
     'bodyeob_replies',
 ]
 
+
 class MilterConvoError(Exception):
-    "Raised on all conversation sequencing errors."""
+    'Raised on all conversation sequencing errors.' ''
     pass
+
 
 # Specific command sets:
 # accept/reject actions
@@ -47,7 +49,8 @@ class BufferedMilter:
     is speaking the milter protocol. This class supplies various
     convenience methods for handling aspects of the milter
     conversation."""
-    def __init__(self, sock, blksize=16*1024):
+
+    def __init__(self, sock, blksize=16 * 1024):
         self.sock = sock
         self.buf = b''
         self.blksize = blksize
@@ -80,9 +83,9 @@ class BufferedMilter:
             # incomplete packet.
             if not data:
                 if self.buf:
-                    raise codec.MilterDecodeError("packet truncated by EOF")
+                    raise codec.MilterDecodeError('packet truncated by EOF')
                 elif not eof_ok:
-                    raise MilterConvoError("unexpected EOF")
+                    raise MilterConvoError('unexpected EOF')
                 else:
                     return None
             self.buf += data
@@ -121,14 +124,13 @@ class BufferedMilter:
         command code not in reply_cmds."""
         r = self.send_get(cmd, **args)
         if r[0] not in reply_cmds:
-            raise MilterConvoError("unexpected response: "+r[0])
+            raise MilterConvoError('unexpected response: ' + r[0])
         return r
 
     def send_ar(self, cmd, **args):
         """Send a message and then wait for a real reply message
         that is from the accept/reject set."""
-        return self.send_get_specific(accept_reject_replies,
-                          cmd, **args)
+        return self.send_get_specific(accept_reject_replies, cmd, **args)
 
     def send_body(self, body):
         """Send the body of a message, properly chunked and
@@ -167,8 +169,7 @@ class BufferedMilter:
         return r
 
     # Option negotiation from the MTA and milter view.
-    def optneg_mta(self, actions=constants.SMFI_V2_ACTS, protocol=constants.SMFI_V2_PROT,
-               strict=True):
+    def optneg_mta(self, actions=constants.SMFI_V2_ACTS, protocol=constants.SMFI_V2_PROT, strict=True):
         """Perform the initial option negocation as a MTA. Returns
         a tuple of (actions, protocol) bitmasks for what we support.
         If strict is True (the default), raises MilterConvoError if
@@ -188,8 +189,7 @@ class BufferedMilter:
         if strict:
             # There should be no bits outside what we claim to
             # support.
-            if (ract & actions) != ract or \
-               (rprot & protocol) != rprot:
+            if (ract & actions) != ract or (rprot & protocol) != rprot:
                 raise MilterConvoError(f'SMFIR_OPTNEG reply with unsupported bits in actions or protocol: 0x{ract:x}/0x{rprot:x}')
         else:
             ract = ract & actions
@@ -204,9 +204,6 @@ class BufferedMilter:
         r = self.get_msg()
         if r[0] != constants.SMFIC_OPTNEG:
             raise MilterConvoError(f'Expected SMFIR_OPTNEG, received {r[0]}/{r[1]}')
-        ract, rprot =  codec.optneg_milter_capable(r[1]['actions'],
-                               r[1]['protocol'],
-                               actions, protocol)
-        self.sock.sendall(codec.encode_optneg(ract, rprot,
-                              is_milter=True))
+        ract, rprot = codec.optneg_milter_capable(r[1]['actions'], r[1]['protocol'], actions, protocol)
+        self.sock.sendall(codec.encode_optneg(ract, rprot, is_milter=True))
         return (ract, rprot)

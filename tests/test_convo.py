@@ -12,8 +12,10 @@ from libmilter import codec
 from libmilter import constants
 from libmilter import convo
 
+
 class ConvError(Exception):
     pass
+
 
 # ---
 # test infrastructure
@@ -21,6 +23,7 @@ class ConvError(Exception):
 # These are from the perspective of the socket; it expects you to read
 # or write.
 READ, WRITE = object(), object()
+
 
 # A fake socket object that implements .recv() and .sendall().
 # It is fed a conversation that it expects (a sequence of read and
@@ -42,25 +45,30 @@ class FakeSocket:
     # is the next expected action.
     def _verify_conv(self, adir):
         if self.cindex >= len(self.conv):
-            raise ConvError("unexpected action")
+            raise ConvError('unexpected action')
         if adir != self.conv[self.cindex][0]:
-            raise ConvError("sequence mismatch")
+            raise ConvError('sequence mismatch')
 
     def _add(self, adir, what):
         self.conv.append((adir, what))
+
     def addReadMsg(self, cmd, **args):
         """Add a message to be read; arguments are as per
         encode_msg."""
         self._add(READ, codec.encode_msg(cmd, **args))
+
     def addRead(self, buf):
         """Add a raw string to be read."""
         self._add(READ, buf)
+
     def addWrite(self, cmd):
         """Add an expected write command."""
         self._add(WRITE, (cmd,))
+
     def addFullWrite(self, cmd, **args):
         """Add an expected write command and its full parameters."""
         self._add(WRITE, (cmd, args))
+
     def addMTAWrite(self, cmd):
         """Add an expected write command and then a SMFIR_CONTINUE
         reply to it."""
@@ -82,8 +90,8 @@ class FakeSocket:
         self.cindex += 1
         if isinstance(obj, (list, tuple)):
             obj = codec.encode_msg(obj[0], **obj[1])
-        if (len(obj) > nbytes):
-            raise ConvError("short read")
+        if len(obj) > nbytes:
+            raise ConvError('short read')
         return obj
 
     def sendall(self, buf):
@@ -98,6 +106,7 @@ class FakeSocket:
         if len(wres) > 1 and r[1] != wres[1]:
             raise ConvError('Unexpected reply parameters: {r[1] instead of {wres[1]}')
 
+
 # -----
 #
 class basicTests(unittest.TestCase):
@@ -105,10 +114,7 @@ class basicTests(unittest.TestCase):
         """Test that we correctly read multiple times to reassemble
         a short message, and that we get the right answer."""
         ams = constants.SMFIC_CONNECT
-        adict = { 'hostname': 'localhost',
-              'family': '4',
-              'port': 1678,
-              'address': '127.10.10.1' }
+        adict = {'hostname': 'localhost', 'family': '4', 'port': 1678, 'address': '127.10.10.1'}
         msg = codec.encode_msg(ams, **adict)
         msg1, msg2 = msg[:10], msg[10:]
         s = FakeSocket()
@@ -128,11 +134,17 @@ class basicTests(unittest.TestCase):
         s.addReadMsg(constants.SMFIR_PROGRESS)
         s.addReadMsg(constants.SMFIR_PROGRESS)
         s.addReadMsg(constants.SMFIR_PROGRESS)
-        s.addReadMsg(constants.SMFIR_DELRCPT, rcpt=["<a@b.c>",])
+        s.addReadMsg(
+            constants.SMFIR_DELRCPT,
+            rcpt=[
+                '<a@b.c>',
+            ],
+        )
         mbuf = convo.BufferedMilter(s)
         rcmd, rdict = mbuf.get_real_msg()
         self.assertEqual(rcmd, constants.SMFIR_DELRCPT)
         self.assertTrue(s.isEmpty())
+
 
 class continuedTests(unittest.TestCase):
     def testHeaders(self):
@@ -187,35 +199,36 @@ class continuedTests(unittest.TestCase):
     optneg_mta_pairs = (
         ((constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT), (constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT)),
         ((0x10, 0x10), (0x10, 0x10)),
-        ((0xff, 0xff), (constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT)),
-        )
+        ((0xFF, 0xFF), (constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT)),
+    )
+
     def testMTAOptneg(self):
         """Test that the MTA version of option negotiation returns
         what we expect it to."""
         for a, b in self.optneg_mta_pairs:
             s = FakeSocket()
             s.addWrite(constants.SMFIC_OPTNEG)
-            s.addReadMsg(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION,
-                     actions=a[0], protocol=a[1])
+            s.addReadMsg(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION, actions=a[0], protocol=a[1])
             # strict=True would blow up on the last test.
             ract, rprot = convo.BufferedMilter(s).optneg_mta(strict=False)
             self.assertEqual(ract, b[0])
             self.assertEqual(rprot, b[1])
 
-    optneg_exc_errors = ((constants.SMFI_V2_ACTS, 0xff),
-                 (0xff, constants.SMFI_V2_PROT),
-                 (0xff, 0xff),)
+    optneg_exc_errors = (
+        (constants.SMFI_V2_ACTS, 0xFF),
+        (0xFF, constants.SMFI_V2_PROT),
+        (0xFF, 0xFF),
+    )
+
     def testMilterONOutside(self):
         """Test that the MTA version of option negotiation errors
         out if there are excess bits in the milter reply."""
         for act, prot in self.optneg_exc_errors:
             s = FakeSocket()
             s.addWrite(constants.SMFIC_OPTNEG)
-            s.addReadMsg(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION,
-                     actions=act, protocol=prot)
+            s.addReadMsg(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION, actions=act, protocol=prot)
             bm = convo.BufferedMilter(s)
-            self.assertRaises(convo.MilterConvoError,
-                      bm.optneg_mta)
+            self.assertRaises(convo.MilterConvoError, bm.optneg_mta)
 
     optneg_milter_pairs = (
         # The basic case; MTA says all V2 actions, all V2 protocol
@@ -224,29 +237,21 @@ class continuedTests(unittest.TestCase):
         ((constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT), (constants.SMFI_V2_ACTS, 0x0)),
         # MTA offers additional protocol exclusions, we tell it not
         # to do them but to do all V2 protocol actions.
-        ((constants.SMFI_V2_ACTS, 0x1ff), (constants.SMFI_V2_ACTS, 0x180)),
+        ((constants.SMFI_V2_ACTS, 0x1FF), (constants.SMFI_V2_ACTS, 0x180)),
         # MTA offers additional actions, we decline.
-        ((0xffff, constants.SMFI_V2_PROT), (constants.SMFI_V2_ACTS, 0x00)),
-        )
+        ((0xFFFF, constants.SMFI_V2_PROT), (constants.SMFI_V2_ACTS, 0x00)),
+    )
+
     def testMilterOptneg(self):
         """Test the milter version of option negotiation."""
         for a, b in self.optneg_milter_pairs:
             s = FakeSocket()
-            s.addReadMsg(
-                constants.SMFIC_OPTNEG,
-                version=constants.MILTER_VERSION,
-                actions=a[0],
-                protocol=a[1]
-            )
-            s.addFullWrite(
-                constants.SMFIC_OPTNEG,
-                version=constants.MILTER_VERSION,
-                actions=b[0],
-                protocol=b[1]
-            )
+            s.addReadMsg(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION, actions=a[0], protocol=a[1])
+            s.addFullWrite(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION, actions=b[0], protocol=b[1])
             ract, rprot = convo.BufferedMilter(s).optneg_milter()
             self.assertEqual(ract, b[0])
             self.assertEqual(rprot, b[1])
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     unittest.main()

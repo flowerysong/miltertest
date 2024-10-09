@@ -3,6 +3,8 @@
 
 # Constants for the milter protocol.
 
+# fmt: off
+
 MILTER_VERSION      = 2         # Milter version we claim to speak
 MILTER_CHUNK_SIZE   = 65535     # How large a SMFIC_BODY body can be
 
