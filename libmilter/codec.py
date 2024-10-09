@@ -9,7 +9,7 @@
 import struct
 
 # Milter constants
-from consts import *
+from .consts import *
 
 __doc__ = """Encode and decode the sendmail milter protocol.
 

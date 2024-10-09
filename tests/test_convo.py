@@ -8,9 +8,9 @@
 #
 import unittest
 
-import codec
-import convo
-from consts import *
+from libmilter import codec
+from libmilter import convo
+from libmilter.consts import *
 
 class ConvError(Exception):
 	pass

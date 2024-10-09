@@ -6,8 +6,8 @@
 # Much of this support is only useful for something doing the MTA side
 # of the milter conversation.
 
-from consts import *
-import codec
+from .consts import *
+from . import codec
 
 __doc__ = """Support for having a milter protocol conversation across a socket"""
 __all__ = ['MilterConvoError', 'BufferedMilter',

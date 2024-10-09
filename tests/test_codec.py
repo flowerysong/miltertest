@@ -6,8 +6,8 @@
 
 import unittest, struct
 
-import codec
-from consts import *
+from libmilter import codec
+from libmilter.consts import *
 
 # This may violate the tenets of (unit)testing, since this is not an
 # exposed interface of the codec module but instead an internal
