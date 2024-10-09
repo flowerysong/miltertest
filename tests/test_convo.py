@@ -31,7 +31,7 @@ READ, WRITE = object(), object()
 # for our purpose, it is enough to know their type.
 # (Optionally it can also know the result dictionary and verify it,
 # because that turned out to be necessary.)
-class FakeSocket(object):
+class FakeSocket:
     def __init__(self, conv=None):
         if conv is None:
             conv = []
@@ -94,11 +94,9 @@ class FakeSocket(object):
         self.cindex += 1
         otype = wres[0]
         if r[0] != otype:
-            raise ConvError("received unexpected reply '%s' vs '%s" % \
-                    (r[0], otype))
+            raise ConvError(f'Received unexpected reply {r[0]} instead of {otype}')
         if len(wres) > 1 and r[1] != wres[1]:
-            raise ConvError("unexpected reply parameters: reply %s vs %s" % \
-                    (r[1], wres[1]))
+            raise ConvError('Unexpected reply parameters: {r[1] instead of {wres[1]}')
 
 # -----
 #
@@ -114,7 +112,8 @@ class basicTests(unittest.TestCase):
         msg = codec.encode_msg(ams, **adict)
         msg1, msg2 = msg[:10], msg[10:]
         s = FakeSocket()
-        s.addRead(msg1); s.addRead(msg2)
+        s.addRead(msg1)
+        s.addRead(msg2)
 
         mbuf = convo.BufferedMilter(s)
         rcmd, rdict = mbuf.get_msg()

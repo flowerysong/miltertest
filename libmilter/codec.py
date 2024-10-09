@@ -16,8 +16,16 @@ __doc__ = """Encode and decode the sendmail milter protocol.
 This takes binary strings and decodes them to milter messages, or
 encodes milter messages into binary strings.
 """
-__all__ = ["MilterProtoError", "MilterIncomplete", "MilterDecodeError",
-       "encode_msg", "decode_msg", "optneg_capable", "encode_optneg",]
+__all__ = [
+    'MilterDecodeError',
+    'MilterIncomplete',
+    'MilterProtoError',
+    'decode_msg',
+    'encode_msg',
+    'encode_optneg',
+    'optneg_milter_capable',
+    'optneg_mta_capable',
+]
 
 # (Public) exceptions
 class MilterProtoError(Exception):
@@ -120,10 +128,10 @@ codec = {
 
 # Encoders take a value and return that value encoded as a binary string.
 def encode_buf(val):
-    return val.encode('UTF-8')
+    return val.encode()
 
 def encode_str(val):
-    return f'{val}\0'.encode('UTF-8')
+    return f'{val}\0'.encode()
 
 def encode_strs(val, empty_ok = False):
     if len(val) == 0 and not empty_ok:
@@ -137,7 +145,7 @@ def encode_strpairs(val):
     return encode_strs(val, empty_ok = True)
 
 def encode_chr(val):
-    return struct.pack('c', val.encode('UTF-8'))
+    return struct.pack('c', val.encode())
 
 def encode_u16(val):
     return struct.pack('!H', val)
@@ -148,7 +156,7 @@ def encode_u32(val):
 def encode_chr3(val):
     if len(val) != 3:
         raise MilterProtoError("mis-sized char3")
-    return struct.pack('3s', val.encode('UTF-8'))
+    return struct.pack('3s', val.encode())
 
 ##
 # decoding.
@@ -169,11 +177,11 @@ def unpack_n(data, fmt):
 
 def decode_chr(data):
     ret = unpack_n(data, 'c')
-    return (ret[0].decode('UTF-8'), ret[1])
+    return (ret[0].decode(), ret[1])
 
 def decode_chr3(data):
     ret = unpack_n(data, '3s')
-    return (ret[0].decode('UTF-8'), ret[1])
+    return (ret[0].decode(), ret[1])
 
 def decode_u16(data):
     return unpack_n(data, '!H')
@@ -185,12 +193,12 @@ def decode_str(data):
     r = data.split(b'\0', 1)
     if len(r) != 2:
         raise MilterNotEnough("short string")
-    return (r[0].decode('UTF-8'), r[1])
+    return (r[0].decode(), r[1])
 
 # A buffer necessarily consumes all remaining data, since it has no
 # terminator.
 def decode_buf(data):
-    return data.decode('UTF-8'), b''
+    return data.decode(), b''
 
 # A string array consumes the rest of the data.
 def decode_strs(data, empty_ok = False):
@@ -249,7 +257,7 @@ def encode_msg(cmd, **kwargs):
     for name, ctype in parmlst:
         data.append(encode(ctype, kwargs[name]))
     dstr = b''.join(data)
-    return struct.pack('!Lc', len(dstr) + 1, cmd.encode('UTF-8')) + dstr
+    return struct.pack('!Lc', len(dstr) + 1, cmd.encode()) + dstr
 
 def decode_msg(data):
     """Decode data into a milter message.
@@ -270,7 +278,7 @@ def decode_msg(data):
             raise MilterDecodeError("zero-length message")
         cmd, data = decode_chr(data)
     except MilterNotEnough:
-        raise MilterIncomplete("need more data")
+        raise MilterIncomplete('Need more data') from None
     if cmd not in codec:
         raise MilterDecodeError(f'decode: unknown command {cmd}')
     # The rest of the packet is len-1 bytes long, so if we have less
@@ -289,9 +297,7 @@ def decode_msg(data):
         try:
             rstruct[name], buf = decode(ctype, buf)
         except MilterNotEnough:
-            # This is an obsessively detailed exception.
-            # It was necessary.
-            raise MilterDecodeError("packet contents for '%s' truncated decoding %s: %d / %s / %s" % (cmd, ctype, mlen, repr(buf), repr(rawdata[:mlen+10])))
+            raise MilterDecodeError(f'Packet contents for {cmd} truncated decoding {ctype}: {mlen} / {buf} / {rawdata[:mlen + 10]}') from None
     # If the packet buffer has remaining data, it means that there was
     # extra, un-consumed data after the data we expected. This is a fatal
     # encoding error.

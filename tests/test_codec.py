@@ -4,7 +4,8 @@
 # TODO: we should have some real, validated binary messages so that we can
 # test proper interoperability.
 
-import unittest, struct
+import struct
+import unittest
 
 from libmilter import codec
 from libmilter import constants

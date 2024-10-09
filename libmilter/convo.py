@@ -42,7 +42,7 @@ bodyeob_replies = accept_reject_replies + (
 )
 
 
-class BufferedMilter(object):
+class BufferedMilter:
     """Maintain a buffered socket connection with another end that
     is speaking the milter protocol. This class supplies various
     convenience methods for handling aspects of the milter
@@ -182,7 +182,7 @@ class BufferedMilter(object):
         self.sock.sendall(codec.encode_optneg(actions, protocol))
         r = self.get_msg()
         if r[0] != constants.SMFIC_OPTNEG:
-            raise MilterConvoError("bad reply to SMFIR_OPTNEG, was: %s/%s" % (r[0], str(r[1])))
+            raise MilterConvoError(f'Bad reply to SMFIR_OPTNEG, {r[0]}/{r[1]}')
         ract = r[1]['actions']
         rprot = r[1]['protocol']
         if strict:
@@ -190,7 +190,7 @@ class BufferedMilter(object):
             # support.
             if (ract & actions) != ract or \
                (rprot & protocol) != rprot:
-                raise MilterConvoError("SMFIR_OPTNEG reply with unsupported bits in actions or protocol: 0x%x/0x%x" % (ract, rprot))
+                raise MilterConvoError(f'SMFIR_OPTNEG reply with unsupported bits in actions or protocol: 0x{ract:x}/0x{rprot:x}')
         else:
             ract = ract & actions
             rprot = rprot & protocol
@@ -203,7 +203,7 @@ class BufferedMilter(object):
         both we and the MTA will do."""
         r = self.get_msg()
         if r[0] != constants.SMFIC_OPTNEG:
-            raise MilterConvoError("first message not SMFIR_OPTNEG, was: %s/%s" % (r[0], str(r[1])))
+            raise MilterConvoError(f'Expected SMFIR_OPTNEG, received {r[0]}/{r[1]}')
         ract, rprot =  codec.optneg_milter_capable(r[1]['actions'],
                                r[1]['protocol'],
                                actions, protocol)
