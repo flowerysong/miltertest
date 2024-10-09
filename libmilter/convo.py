@@ -34,7 +34,7 @@ class BufferedMilter(object):
     conversation."""
     def __init__(self, sock, blksize=16*1024):
         self.sock = sock
-        self.buf = ''
+        self.buf = b''
         self.blksize = blksize
 
     def get_msg(self, eof_ok=False):
