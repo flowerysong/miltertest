@@ -168,6 +168,16 @@ class MilterConnection:
                 raise MilterError(f'Unexpected reply to {constants.SMFIC_HEADER}: {r}')
         return r
 
+    def send_eom(self):
+        """Send EOM and collect any EOM actions"""
+        res = []
+        self._send(constants.SMFIC_BODYEOB)
+        while True:
+            msg = self.get_real_msg()
+            res.append(msg)
+            if msg[0] in accept_reject_replies:
+                return res
+
     # Option negotiation from the MTA and milter view.
     def optneg_mta(self, actions=constants.SMFI_V2_ACTS, protocol=constants.SMFI_V2_PROT, strict=True):
         """Perform the initial option negocation as a MTA. Returns
