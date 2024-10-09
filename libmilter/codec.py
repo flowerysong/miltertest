@@ -120,28 +120,35 @@ codec = {
 
 # Encoders take a value and return that value encoded as a binary string.
 def encode_buf(val):
-    return val
+    return val.encode('UTF-8')
+
 def encode_str(val):
-    return "%s\0" % val
+    return f'{val}\0'.encode('UTF-8')
+
 def encode_strs(val, empty_ok = False):
     if len(val) == 0 and not empty_ok:
         # See comment above for why this is justified.
-        raise MilterProtoError("empty string array")
-    return ''.join(encode_str(x) for x in val)
+        raise MilterProtoError('empty string array')
+    return b''.join(encode_str(x) for x in val)
+
 def encode_strpairs(val):
     if len(val) % 2 != 0:
         raise MilterProtoError("uneven number of name/value pairs")
     return encode_strs(val, empty_ok = True)
+
 def encode_chr(val):
-    return struct.pack('c', val)
+    return struct.pack('c', val.encode('UTF-8'))
+
 def encode_u16(val):
     return struct.pack('!H', val)
+
 def encode_u32(val):
     return struct.pack('!L', val)
+
 def encode_chr3(val):
     if len(val) != 3:
         raise MilterProtoError("mis-sized char3")
-    return struct.pack('3s', val)
+    return struct.pack('3s', val.encode('UTF-8'))
 
 ##
 # decoding.
@@ -161,23 +168,29 @@ def unpack_n(data, fmt):
     return (struct.unpack(fmt, data[:nbytes])[0], data[nbytes:])
 
 def decode_chr(data):
-    return unpack_n(data, 'c')
+    ret = unpack_n(data, 'c')
+    return (ret[0].decode('UTF-8'), ret[1])
+
 def decode_chr3(data):
-    return unpack_n(data, '3s')
+    ret = unpack_n(data, '3s')
+    return (ret[0].decode('UTF-8'), ret[1])
+
 def decode_u16(data):
     return unpack_n(data, '!H')
+
 def decode_u32(data):
     return unpack_n(data, '!L')
+
 def decode_str(data):
-    r = data.split('\0', 1)
+    r = data.split(b'\0', 1)
     if len(r) != 2:
         raise MilterNotEnough("short string")
-    return r[0], r[1]
+    return (r[0].decode('UTF-8'), r[1])
 
 # A buffer necessarily consumes all remaining data, since it has no
 # terminator.
 def decode_buf(data):
-    return data, ''
+    return data.decode('UTF-8'), b''
 
 # A string array consumes the rest of the data.
 def decode_strs(data, empty_ok = False):
@@ -188,7 +201,8 @@ def decode_strs(data, empty_ok = False):
     if not empty_ok and not r:
         # See comment above for why this is justified.
         raise MilterNotEnough("no strings in string array")
-    return r, ''
+    return r, b''
+
 def decode_strpairs(data):
     r, data = decode_strs(data, empty_ok = True)
     if len(r) % 2 != 0:
@@ -204,9 +218,13 @@ codectypes = {
     'u32': (encode_u32, decode_u32),
     'strs': (encode_strs, decode_strs),
     'strpairs': (encode_strpairs, decode_strpairs),
-    }
+}
+
+
 def encode(ctype, val):
     return codectypes[ctype][0](val)
+
+
 def decode(ctype, data):
     return codectypes[ctype][1](data)
 
@@ -221,7 +239,7 @@ def encode_msg(cmd, **kwargs):
     for the command are then given as keyword arguments, eg
     encode_msg('H', helo="localhost.localdomain")."""
     if cmd not in codec:
-        raise MilterProtoError("encode: unknown command: "+cmd)
+        raise MilterProtoError(f'encode: unknown command {cmd}')
     parmlst = codec[cmd]
     parms = set([x[0] for x in parmlst])
     uparms = set(kwargs.keys())
@@ -229,9 +247,9 @@ def encode_msg(cmd, **kwargs):
         raise MilterProtoError("encode: parameter mismatch")
     data = []
     for name, ctype in parmlst:
-        data.append(encode(ctype, (kwargs[name])))
-    dstr = "".join(data)
-    return struct.pack("!Lc", len(dstr) + 1, cmd) + dstr
+        data.append(encode(ctype, kwargs[name]))
+    dstr = b''.join(data)
+    return struct.pack('!Lc', len(dstr) + 1, cmd.encode('UTF-8')) + dstr
 
 def decode_msg(data):
     """Decode data into a milter message.
@@ -254,7 +272,7 @@ def decode_msg(data):
     except MilterNotEnough:
         raise MilterIncomplete("need more data")
     if cmd not in codec:
-        raise MilterDecodeError("decode: unknown command: "+cmd)
+        raise MilterDecodeError(f'decode: unknown command {cmd}')
     # The rest of the packet is len-1 bytes long, so if we have less
     # data than that we need more.
     dlen = mlen-1
