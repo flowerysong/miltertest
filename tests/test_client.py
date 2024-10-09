@@ -2,16 +2,14 @@
 # Copyright 2024 Paul Arthur MacIain
 # GNU General Public License v3.0 (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
-# It is quite likely that these tests are overly peculiar.
-#
-# test milter.convo.
-# assumes that the milter.codec module works.
-#
 import unittest
 
 from libmilter import codec
 from libmilter import constants
-from libmilter import convo
+from libmilter import (
+    MilterConnection,
+    MilterError,
+)
 
 
 class ConvError(Exception):
@@ -122,7 +120,7 @@ class basicTests(unittest.TestCase):
         s.addRead(msg1)
         s.addRead(msg2)
 
-        mbuf = convo.BufferedMilter(s)
+        mbuf = MilterConnection(s)
         rcmd, rdict = mbuf.get_msg()
         self.assertEqual(ams, rcmd)
         self.assertEqual(adict, rdict)
@@ -141,7 +139,7 @@ class basicTests(unittest.TestCase):
                 '<a@b.c>',
             ],
         )
-        mbuf = convo.BufferedMilter(s)
+        mbuf = MilterConnection(s)
         rcmd, rdict = mbuf.get_real_msg()
         self.assertEqual(rcmd, constants.SMFIR_DELRCPT)
         self.assertTrue(s.isEmpty())
@@ -155,7 +153,7 @@ class continuedTests(unittest.TestCase):
         hdrs = (('From', 'Chris'), ('To', 'Simon'), ('Subject', 'Yak'))
         for _ in hdrs:
             s.addMTAWrite(constants.SMFIC_HEADER)
-        mbuf = convo.BufferedMilter(s)
+        mbuf = MilterConnection(s)
         rcmd, rdict = mbuf.send_headers(hdrs)
         self.assertEqual(rcmd, constants.SMFIR_CONTINUE)
         self.assertTrue(s.isEmpty())
@@ -168,7 +166,7 @@ class continuedTests(unittest.TestCase):
         s.addMTAWrite(constants.SMFIC_HEADER)
         s.addWrite(constants.SMFIC_HEADER)
         s.addReadMsg(constants.SMFIR_ACCEPT)
-        rcmd, rdict = convo.BufferedMilter(s).send_headers(hdrs)
+        rcmd, rdict = MilterConnection(s).send_headers(hdrs)
         self.assertEqual(rcmd, constants.SMFIR_ACCEPT)
         self.assertTrue(s.isEmpty())
 
@@ -180,7 +178,7 @@ class continuedTests(unittest.TestCase):
         s.addMTAWrite(constants.SMFIC_BODY)
         s.addMTAWrite(constants.SMFIC_BODY)
         s.addMTAWrite(constants.SMFIC_BODY)
-        mbuf = convo.BufferedMilter(s)
+        mbuf = MilterConnection(s)
         rcmd, rdict = mbuf.send_body(body)
         self.assertEqual(rcmd, constants.SMFIR_CONTINUE)
         self.assertTrue(s.isEmpty())
@@ -193,7 +191,7 @@ class continuedTests(unittest.TestCase):
         s.addMTAWrite(constants.SMFIC_BODY)
         s.addWrite(constants.SMFIC_BODY)
         s.addReadMsg(constants.SMFIR_ACCEPT)
-        rcmd, rdict = convo.BufferedMilter(s).send_body(body)
+        rcmd, rdict = MilterConnection(s).send_body(body)
         self.assertEqual(rcmd, constants.SMFIR_ACCEPT)
         self.assertTrue(s.isEmpty())
 
@@ -211,7 +209,7 @@ class continuedTests(unittest.TestCase):
             s.addWrite(constants.SMFIC_OPTNEG)
             s.addReadMsg(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION, actions=a[0], protocol=a[1])
             # strict=True would blow up on the last test.
-            ract, rprot = convo.BufferedMilter(s).optneg_mta(strict=False)
+            ract, rprot = MilterConnection(s).optneg_mta(strict=False)
             self.assertEqual(ract, b[0])
             self.assertEqual(rprot, b[1])
 
@@ -228,8 +226,8 @@ class continuedTests(unittest.TestCase):
             s = FakeSocket()
             s.addWrite(constants.SMFIC_OPTNEG)
             s.addReadMsg(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION, actions=act, protocol=prot)
-            bm = convo.BufferedMilter(s)
-            self.assertRaises(convo.MilterConvoError, bm.optneg_mta)
+            bm = MilterConnection(s)
+            self.assertRaises(MilterError, bm.optneg_mta)
 
     optneg_milter_pairs = (
         # The basic case; MTA says all V2 actions, all V2 protocol
@@ -249,7 +247,7 @@ class continuedTests(unittest.TestCase):
             s = FakeSocket()
             s.addReadMsg(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION, actions=a[0], protocol=a[1])
             s.addFullWrite(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION, actions=b[0], protocol=b[1])
-            ract, rprot = convo.BufferedMilter(s).optneg_milter()
+            ract, rprot = MilterConnection(s).optneg_milter()
             self.assertEqual(ract, b[0])
             self.assertEqual(rprot, b[1])
 
