@@ -71,7 +71,7 @@ class codingTests(unittest.TestCase):
 		for ctype, data in self.bdecs:
 			self.assertRaises(codec.MilterProtoError,
 					  codec.decode, ctype, data)
-		
+
 
 # A sample message for every milter protocol message that we know about.
 sample_msgs = [
@@ -204,7 +204,7 @@ class basicTests(unittest.TestCase):
 			r = self._changelen(r, +10) + ("*" * 10)
 			self.assertRaises(codec.MilterDecodeError,
 					  codec.decode_msg, r)
-			
+
 
 	def testZeroLength(self):
 		"""Trying to decode a zero-length message should fail with
@@ -258,7 +258,7 @@ class basicTests(unittest.TestCase):
 			r = codec.optneg_milter_capable(a[0], a[1],
 							b[0], b[1])
 			self.assertEqual(r, c)
-		
+
 	def testOptnegEncode(self):
 		"""Test that encode_optneg() works right."""
 		return

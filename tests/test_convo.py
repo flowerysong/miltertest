@@ -112,7 +112,7 @@ class basicTests(unittest.TestCase):
 			  'port': 1678,
 			  'address': '127.10.10.1' }
 		msg = codec.encode_msg(ams, **adict)
-		msg1, msg2 = msg[:10], msg[10:]		
+		msg1, msg2 = msg[:10], msg[10:]
 		s = FakeSocket()
 		s.addRead(msg1); s.addRead(msg2)
 
