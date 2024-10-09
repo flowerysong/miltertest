@@ -3,67 +3,90 @@
 
 # Constants for the milter protocol.
 
-__doc__ = """Constants for the milter protocol"""
+MILTER_VERSION      = 2         # Milter version we claim to speak
+MILTER_CHUNK_SIZE   = 65535     # How large a SMFIC_BODY body can be
 
-MILTER_VERSION = 2 # Milter version we claim to speak (from pmilter)
-MILTER_CHUNK_SIZE = 65535 # How large a SMFIC_BODY body can be
+# Commands
+SMFIC_ABORT     = 'A'
+SMFIC_BODY      = 'B'   # body chunk
+SMFIC_CONNECT   = 'C'   # connection information
+SMFIC_MACRO     = 'D'   # define macro
+SMFIC_BODYEOB   = 'E'   # final body chunk
+SMFIC_HELO      = 'H'   # HELO or EHLO
+SMFIC_QUIT_NC   = 'K'   # QUIT but new connection follows
+SMFIC_HEADER    = 'L'
+SMFIC_MAIL      = 'M'   # MAIL FROM
+SMFIC_EOH       = 'N'
+SMFIC_OPTNEG    = 'O'   # option negotiation
+SMFIC_QUIT      = 'Q'
+SMFIC_RCPT      = 'R'   # RCPT TO
+SMFIC_DATA      = 'T'
 
-# Potential milter command codes and their corresponding PpyMilter callbacks.
-# From sendmail's include/libmilter/mfdef.h
-SMFIC_ABORT   = 'A' # "Abort"
-SMFIC_BODY    = 'B' # "Body chunk"
-SMFIC_CONNECT = 'C' # "Connection information"
-SMFIC_MACRO   = 'D' # "Define macro"
-SMFIC_BODYEOB = 'E' # "final body chunk (End)"
-SMFIC_HELO    = 'H' # "HELO/EHLO"
-SMFIC_HEADER  = 'L' # "Header"
-SMFIC_MAIL    = 'M' # "MAIL from"
-SMFIC_EOH     = 'N' # "EOH"
-SMFIC_OPTNEG  = 'O' # "Option negotation"
-SMFIC_RCPT    = 'R' # "RCPT to"
-SMFIC_QUIT    = 'Q' # "QUIT"
-SMFIC_DATA    = 'T' # "DATA"
+# What the filter might do
+SMFIF_ADDHDRS       = 0x0001    # add headers
+SMFIF_CHGBODY       = 0x0002    # replace body
+SMFIF_ADDRCPT       = 0x0004    # add recipients
+SMFIF_DELRCPT       = 0x0008    # delete recipientes
+SMFIF_CHGHDRS       = 0x0010    # change and delete headers
+SMFIF_QUARANTINE    = 0x0020
+SMFIF_CHGFROM       = 0x0040    # change envelope sender
+SMFIF_ADDRCPT_PAR   = 0x0080    # add recipients including arguments
+SMFIF_SETSYMLIST    = 0x0100    # send set of symbols that it wants
 
-# From the milter documentation.
-# Things that milters can do:
-SMFIF_ADDHDRS	= 0x01
-SMFIF_CHGBODY	= 0x02
-SMFIF_ADDRCPT	= 0x04
-SMFIF_DELRCPT	= 0x08
-SMFIF_CHGHDRS	= 0x10
-SMFIF_QUARANTINE = 0x20
+# bitmask of actions supported in each protocol version
+SMFI_V1_ACTS = 0x000f
+SMFI_V2_ACTS = 0x003f
+SMFI_V6_ACTS = 0x01ff
 
-# A bitmask of all actions supporting in protocol version 2.
-SMFI_V2_ACTS = 0x3f
+# protocol negotiation
+SMFIP_NOCONNECT     = 0x00000001    # MTA should not send connection info
+SMFIP_NOHELO        = 0x00000002    # MTA should not send hello
+SMFIP_NOMAIL        = 0x00000004    # MTA should not send MAIL
+SMFIP_NORCPT        = 0x00000008    # MTA should not send RCPT
+SMFIP_NOBODY        = 0x00000010    # MTA should not send body
+SMFIP_NOHDRS        = 0x00000020    # MTA should not send headers
+SMFIP_NOEOH         = 0x00000040    # MTA should not send EOH
+SMFIP_NR_HDR        = 0x00000080    # No reply for headers
+SMFIP_NOUNKNOWN     = 0x00000100    # MTA should not send unknown commands
+SMFIP_NODATA        = 0x00000200    # MTA should not send DATA
+SMFIP_SKIP          = 0x00000400    # MTA understands SMFIS_SKIP
+SMFIP_RCPT_REJ      = 0x00000800    # MTA should also send rejected RCPTs
+SMFIP_NR_CONN       = 0x00001000    # No reply for connect
+SMFIP_NR_HELO       = 0x00002000    # No reply for HELO
+SMFIP_NR_MAIL       = 0x00004000    # No reply for MAIL
+SMFIP_NR_RCPT       = 0x00008000    # No reply for RCPT
+SMFIP_NR_DATA       = 0x00010000    # No reply for DATA
+SMFIP_NR_UNKN       = 0x00020000    # No reply for UNKN
+SMFIP_NR_EOH        = 0x00040000    # No reply for eoh
+SMFIP_NR_BODY       = 0x00080000    # No reply for body chunk
+SMFIP_HDR_LEADSPC   = 0x00100000    # header value leading space
+SMFIP_MDS_256K      = 0x10000000    # MILTER_MAX_DATA_SIZE=256K
+SMFIP_MDS_1M        = 0x20000000    # MILTER_MAX_DATA_SIZE=1M
 
-# From sendmail's include/libmilter/mfdef.h
-# Things that the mailer does not need to send the milter:
-SMFIP_NOCONNECT	= 0x01
-SMFIP_NOHELO	= 0x02
-SMFIP_NOMAIL	= 0x04
-SMFIP_NORCPT	= 0x08
-SMFIP_NOBODY	= 0x10
-SMFIP_NOHDRS	= 0x20
-SMFIP_NOEOH	= 0x40
-
-# A bitmask of all supported protocol steps in protocol version 2.
-SMFI_V2_PROT = 0x7f
+# bitmask of protocol steps supported in each version
+SMFI_V1_PROT = 0x00003f
+SMFI_V2_PROT = 0x00007f
+SMFI_V6_PROT = 0x1fffff
 
 # Acceptable response commands/codes to return to sendmail (with accompanying
 # command data).  From sendmail's include/libmilter/mfdef.h
-SMFIR_ADDRCPT	= '+' # 'Add recipient'
-SMFIR_DELRCPT	= '-' # 'Delete recipient'
-SMFIR_ACCEPT	= 'a' # 'Accept recipient'
-SMFIR_REPLBODY	= 'b' # 'replace body (chunk)'
-SMFIR_CONTINUE	= 'c' # 'Continue'
-SMFIR_DISCARD	= 'd' # 'discard'
-SMFIR_CONN_FAIL = 'f' # 'cause a connection failure'
-SMFIR_ADDHEADER = 'h' # 'add header'
-SMFIR_INSHEADER = 'i' # 'insert header'
-SMFIR_CHGHEADER = 'm' # 'change header'
-SMFIR_PROGRESS	= 'p' # 'progress'
-SMFIR_QUARANTINE = 'q' # quarantine
-SMFIR_REJECT	= 'r' # 'reject'
-SMFIR_SETSENDER = 's' # may be v3 only
-SMFIR_TEMPFAIL	= 't' # 'tempfail'
-SMFIR_REPLYCODE = 'y' # 'reply code'
+SMFIR_ADDRCPT       = '+'   # Add recipient
+SMFIR_DELRCPT       = '-'   # Delete recipient
+SMFIR_ADDRCPT_PAR   = '2'   # Add recipient (including ESMTP args)
+SMFIR_SHUTDOWN      = '4'   # 421: shutdown (internal to MTA)
+SMFIR_ACCEPT        = 'a'   # Accept
+SMFIR_REPLBODY      = 'b'   # Replace body (chunk)
+SMFIR_CONTINUE      = 'c'   # Continue
+SMFIR_DISCARD       = 'd'   # Discard
+SMFIR_CHGFROM       = 'e'   # Change envelope sender (from)
+SMFIR_CONN_FAIL     = 'f'   # Cause a connection failure
+SMFIR_ADDHEADER     = 'h'   # Add header
+SMFIR_INSHEADER     = 'i'   # Insert header
+SMFIR_SETSYMLIST    = 'l'   # Set list of symbols (macros)
+SMFIR_CHGHEADER     = 'm'   # Change header
+SMFIR_PROGRESS      = 'p'   # Progress
+SMFIR_QUARANTINE    = 'q'   # Quarantine
+SMFIR_REJECT        = 'r'   # Reject
+SMFIR_SKIP          = 's'   # Skip
+SMFIR_TEMPFAIL      = 't'   # Tempfail
+SMFIR_REPLYCODE     = 'y'   # Reply code
