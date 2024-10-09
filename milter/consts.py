@@ -1,6 +1,8 @@
-#
+# Copyright 2011 Chris Siebenmann
+# GNU General Public License v3.0 (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 # Constants for the milter protocol.
-#
+
 __doc__ = """Constants for the milter protocol"""
 
 MILTER_VERSION = 2 # Milter version we claim to speak (from pmilter)

@@ -1,4 +1,6 @@
-#
+# Copyright 2011 Chris Siebenmann
+# GNU General Public License v3.0 (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 # TODO: we should have some real, validated binary messages so that we can
 # test proper interoperability.
 

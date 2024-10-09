@@ -1,4 +1,6 @@
-#
+# Copyright 2011 Chris Siebenmann
+# GNU General Public License v3.0 (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 # It is quite likely that these tests are overly peculiar.
 #
 # test milter.convo.

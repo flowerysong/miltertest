@@ -1,4 +1,6 @@
-#
+# Copyright 2011 Chris Siebenmann
+# GNU General Public License v3.0 (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 # Support for having a milter protocol conversation over a network
 # socket (or at least something that supports .recv).
 # Much of this support is only useful for something doing the MTA side

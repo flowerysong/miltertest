@@ -1,4 +1,6 @@
-#
+# Copyright 2011 Chris Siebenmann
+# GNU General Public License v3.0 (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 # Encode and decode the milter protocol.
 # This does not do any network conversation; it simply takes data buffers
 # and decodes them to milter messages or encodes milter messages into a
