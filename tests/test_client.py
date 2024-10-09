@@ -166,8 +166,8 @@ class continuedTests(unittest.TestCase):
         s.addMTAWrite(constants.SMFIC_HEADER)
         s.addWrite(constants.SMFIC_HEADER)
         s.addReadMsg(constants.SMFIR_ACCEPT)
-        rcmd, rdict = MilterConnection(s).send_headers(hdrs)
-        self.assertEqual(rcmd, constants.SMFIR_ACCEPT)
+        with self.assertRaises(MilterError):
+            MilterConnection(s).send_headers(hdrs)
         self.assertTrue(s.isEmpty())
 
     def testBodySequence(self):
@@ -191,8 +191,8 @@ class continuedTests(unittest.TestCase):
         s.addMTAWrite(constants.SMFIC_BODY)
         s.addWrite(constants.SMFIC_BODY)
         s.addReadMsg(constants.SMFIR_ACCEPT)
-        rcmd, rdict = MilterConnection(s).send_body(body)
-        self.assertEqual(rcmd, constants.SMFIR_ACCEPT)
+        with self.assertRaises(MilterError):
+            MilterConnection(s).send_body(body)
         self.assertTrue(s.isEmpty())
 
     optneg_mta_pairs = (

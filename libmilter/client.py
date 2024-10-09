@@ -11,8 +11,8 @@ from . import codec
 from . import constants
 
 __all__ = [
+    'MilterConnection',
     'MilterError',
-    'Milter',
     'accept_reject_replies',
     'bodyeob_replies',
 ]
@@ -102,7 +102,7 @@ class MilterConnection:
             if not r or r[0] != constants.SMFIR_PROGRESS:
                 return r
 
-    def send(self, cmd, **args):
+    def _send(self, cmd, **args):
         """Send an encoded milter message. The arguments are the
         same arguments that codec.encode_msg() takes."""
         self.sock.sendall(codec.encode_msg(cmd, **args))
@@ -111,14 +111,14 @@ class MilterConnection:
         """Send a SMFIC_MACRO message for the specific macro.
         The name and values are taken from the keyword arguments."""
         namevals = [x for items in args.items() for x in items]
-        self.send(constants.SMFIC_MACRO, cmdcode=cmdcode, nameval=namevals)
+        self._send(constants.SMFIC_MACRO, cmdcode=cmdcode, nameval=namevals)
 
     # The following methods are only useful if you are handling
     # the MTA side of the milter conversation.
     def send_get(self, cmd, **args):
-        """Send a message (as with .send()) and then wait for
+        """Send a message (as with ._send()) and then wait for
         a real reply message."""
-        self.send(cmd, **args)
+        self._send(cmd, **args)
         return self.get_real_msg()
 
     def send_get_specific(self, reply_cmds, cmd, **args):
@@ -129,6 +129,11 @@ class MilterConnection:
         if r[0] not in reply_cmds:
             raise MilterError('unexpected response: ' + r[0])
         return r
+
+    def send(self, cmd, **kwargs):
+        """Send a message and wait for SMFIR_CONTINUE. If any other response
+        is received, that's an error."""
+        self.send_get_specific(constants.SMFIR_CONTINUE, cmd, **kwargs)
 
     def send_ar(self, cmd, **args):
         """Send a message and then wait for a real reply message
