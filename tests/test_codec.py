@@ -11,12 +11,6 @@ from libmilter import codec
 from libmilter import constants
 
 
-# This may violate the tenets of (unit)testing, since this is not an
-# exposed interface of the codec module but instead an internal
-# implementation detail. I am testing it directly because I want to
-# know if encoding or decoding a particular type of thing fails,
-# rather than inferring it through the failure of various message
-# encoding/decoding tests.
 class codingTests(unittest.TestCase):
     ctypes = (
         ('char', 'A'),
@@ -104,23 +98,31 @@ sample_msgs = [
     ('D', {'cmdcode': 'R', 'nameval': ['rcpt_mailer', 'abc', 'rcpt_host', 'localhost', 'rcpt_addr', 'cks']}),
     ('E', {}),
     ('H', {'helo': 'localhost.localdomain'}),
+    ('K', {}),
     ('L', {'name': 'Subject', 'value': 'Tedium'}),
     ('M', {'args': ['<>', 'haha']}),
     ('N', {}),
     ('O', {'version': 2, 'actions': 0x01, 'protocol': 0x02}),
-    ('R', {'args': ['<nosuch@cs.toronto.edu>', 'SIZE=100']}),
     ('Q', {}),
-    ('+', {'rcpt': '<suchno@toronto.edu>'}),
-    ('-', {'rcpt': '<isthere@toronto.edu>'}),
+    ('R', {'args': ['<foo@example.com>', 'SIZE=100']}),
+    ('T', {}),
+    ('+', {'rcpt': '<foo@example.com>'}),
+    ('-', {'rcpt': '<foo@example.com>'}),
+    ('2', {'rcpt': '<foo@example.com>', 'args': ['SIZE=100']}),
+    ('4', {}),
     ('a', {}),
     ('b', {'buf': 'ARGLEBARGLE TEDIUM'}),
     ('c', {}),
     ('d', {}),
+    ('e', {'from': '<foo@example.com>', 'args': ['AUTH=bar']}),
+    ('f', {}),
     ('h', {'name': 'X-Annoyance', 'value': 'Testing'}),
+    ('l', {'where': 1, 'macros': 'i dunno, probably something'}),
     ('m', {'index': 10, 'name': 'X-Spam-Goblets', 'value': '100% canned'}),
     ('p', {}),
     ('q', {'reason': 'Your mother was an Englishman'}),
     ('r', {}),
+    ('s', {}),
     ('t', {}),
     ('y', {'smtpcode': '450', 'space': ' ', 'text': 'lazyness strikes'}),
     # It is explicitly valid to have an empty value for a modified
