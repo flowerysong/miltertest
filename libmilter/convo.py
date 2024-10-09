@@ -9,7 +9,6 @@
 from . import codec
 from . import constants
 
-__doc__ = """Support for having a milter protocol conversation across a socket"""
 __all__ = [
     'MilterConvoError',
     'BufferedMilter',
@@ -19,28 +18,32 @@ __all__ = [
 
 
 class MilterConvoError(Exception):
-    'Raised on all conversation sequencing errors.' ''
-    pass
+    """Conversation sequence error"""
 
 
 # Specific command sets:
 # accept/reject actions
-accept_reject_replies = (
-    constants.SMFIR_ACCEPT,
-    constants.SMFIR_CONTINUE,
-    constants.SMFIR_REJECT,
-    constants.SMFIR_TEMPFAIL,
-    constants.SMFIR_REPLYCODE,
-    constants.SMFIR_DISCARD,
+accept_reject_replies = frozenset(
+    [
+        constants.SMFIR_ACCEPT,
+        constants.SMFIR_CONTINUE,
+        constants.SMFIR_REJECT,
+        constants.SMFIR_TEMPFAIL,
+        constants.SMFIR_REPLYCODE,
+        constants.SMFIR_DISCARD,
+    ]
 )
 
 # actions valid after BODYEOB
-bodyeob_replies = accept_reject_replies + (
-    constants.SMFIR_ADDHEADER,
-    constants.SMFIR_CHGHEADER,
-    constants.SMFIR_REPLBODY,
-    constants.SMFIR_ADDRCPT,
-    constants.SMFIR_DELRCPT,
+bodyeob_replies = frozenset(
+    [
+        *accept_reject_replies,
+        constants.SMFIR_ADDHEADER,
+        constants.SMFIR_CHGHEADER,
+        constants.SMFIR_REPLBODY,
+        constants.SMFIR_ADDRCPT,
+        constants.SMFIR_DELRCPT,
+    ]
 )
 
 
@@ -63,7 +66,7 @@ class BufferedMilter:
 
         If we see a clean EOF, we normally raise MilterConvoError.
         If eof_ok is True, we instead return None."""
-        while 1:
+        while True:
             try:
                 # .decode_msg will fail with an incomplete
                 # error if self.buf is empty, so we don't
@@ -84,17 +87,16 @@ class BufferedMilter:
             if not data:
                 if self.buf:
                     raise codec.MilterDecodeError('packet truncated by EOF')
-                elif not eof_ok:
+                if not eof_ok:
                     raise MilterConvoError('unexpected EOF')
-                else:
-                    return None
+                return None
             self.buf += data
             del data
 
     def get_real_msg(self, eof_ok=False):
         """Read the next real message, one that is not a SMFIR_PROGRESS
         notification. The arguments are for get_msg."""
-        while 1:
+        while True:
             r = self.get_msg(eof_ok)
             if not r or r[0] != constants.SMFIR_PROGRESS:
                 return r

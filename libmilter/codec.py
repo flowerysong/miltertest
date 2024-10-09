@@ -11,11 +11,6 @@ import struct
 # Milter constants
 from . import constants
 
-__doc__ = """Encode and decode the sendmail milter protocol.
-
-This takes binary strings and decodes them to milter messages, or
-encodes milter messages into binary strings.
-"""
 __all__ = [
     'MilterDecodeError',
     'MilterIncomplete',
@@ -32,27 +27,19 @@ __all__ = [
 class MilterProtoError(Exception):
     """General encoding or decoding failure."""
 
-    pass
-
 
 class MilterIncomplete(MilterProtoError):
     """The data buffer passed for decoding needs more data."""
 
-    pass
-
 
 class MilterDecodeError(MilterProtoError):
     """The milter packet we are trying to decode is malformed."""
-
-    pass
 
 
 # This is effectively an internal exception; it is turned into either
 # MilterIncomplete or MilterDecodeError.
 class MilterNotEnough(MilterProtoError):
     """Not enough data to finish decoding."""
-
-    pass
 
 
 # This maps milter commands and responses to the data structures that
@@ -284,7 +271,7 @@ def encode_msg(cmd, **kwargs):
     if cmd not in codec:
         raise MilterProtoError(f'encode: unknown command {cmd}')
     parmlst = codec[cmd]
-    parms = set([x[0] for x in parmlst])
+    parms = {x[0] for x in parmlst}
     uparms = set(kwargs.keys())
     if parms != uparms:
         raise MilterProtoError('encode: parameter mismatch')
