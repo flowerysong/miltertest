@@ -145,14 +145,8 @@ class MilterConnection:
             cend = cstart + constants.MILTER_CHUNK_SIZE
             blob = body[cstart:cend]
             r = self.send_ar(constants.SMFIC_BODY, buf=blob)
-            # Some responses require an immediate abort, some
-            # allow it as a MAY, and some are silent. We choose
-            # to immediately abort on all non-continue responses
-            # because this is a) simple and b) apparently spec
-            # compliant (to the extent that we even have a formal
-            # spec).
             if r[0] != constants.SMFIR_CONTINUE:
-                break
+                raise MilterError(f'Unexpected reply to {constants.SMFIC_BODY}: {r}')
         return r
 
     def send_headers(self, headertuples):
@@ -165,10 +159,8 @@ class MilterConnection:
         have been completely transmitted."""
         for hname, hval in headertuples:
             r = self.send_ar(constants.SMFIC_HEADER, name=hname, value=hval)
-            # As above, we immediately stop if we get a
-            # non-continue response.
             if r[0] != constants.SMFIR_CONTINUE:
-                break
+                raise MilterError(f'Unexpected reply to {constants.SMFIC_HEADER}: {r}')
         return r
 
     # Option negotiation from the MTA and milter view.
