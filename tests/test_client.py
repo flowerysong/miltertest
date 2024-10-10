@@ -121,7 +121,7 @@ class basicTests(unittest.TestCase):
         s.addRead(msg2)
 
         mbuf = MilterConnection(s)
-        rcmd, rdict = mbuf.get_msg()
+        rcmd, rdict = mbuf._recv()
         self.assertEqual(ams, rcmd)
         self.assertEqual(adict, rdict)
         self.assertTrue(s.isEmpty())
@@ -140,7 +140,7 @@ class basicTests(unittest.TestCase):
             ],
         )
         mbuf = MilterConnection(s)
-        rcmd, rdict = mbuf.get_real_msg()
+        rcmd, rdict = mbuf.recv()
         self.assertEqual(rcmd, constants.SMFIR_DELRCPT)
         self.assertTrue(s.isEmpty())
 

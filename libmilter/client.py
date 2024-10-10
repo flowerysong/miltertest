@@ -61,7 +61,7 @@ class MilterConnection:
         self.buf = b''
         self.blksize = blksize
 
-    def get_msg(self, eof_ok=False):
+    def _recv(self, eof_ok=False):
         """Retrieve the next message from the connection message.
         Returns the decoded message as a tuple of (cmd, paramdict).
         Raises MilterDecodeError if we see EOF with an incomplete
@@ -78,12 +78,11 @@ class MilterConnection:
                 self.buf = data
                 return (rcmd, rdict)
             except codec.MilterIncomplete:
-                # This falls through to cause us to read
-                # stuff.
+                # Fall through to read more data
                 pass
 
             data = self.sock.recv(self.blksize)
-            # Check for EOF on the read.
+            # Check for EOF on the recv.
             # If we have data left in self.buf, it axiomatically
             # failed to decode above and so it must be an
             # incomplete packet.
@@ -96,11 +95,11 @@ class MilterConnection:
             self.buf += data
             del data
 
-    def get_real_msg(self, eof_ok=False):
+    def recv(self, eof_ok=False):
         """Read the next real message, one that is not a SMFIR_PROGRESS
         notification. The arguments are for get_msg."""
         while True:
-            r = self.get_msg(eof_ok)
+            r = self._recv(eof_ok)
             if not r or r[0] != constants.SMFIR_PROGRESS:
                 return r
 
@@ -121,7 +120,7 @@ class MilterConnection:
         """Send a message (as with ._send()) and then wait for
         a real reply message."""
         self._send(cmd, **args)
-        return self.get_real_msg()
+        return self.recv()
 
     def send_get_specific(self, reply_cmds, cmd, **args):
         """Send a message and then wait for a real reply
@@ -175,7 +174,7 @@ class MilterConnection:
         res = []
         self._send(constants.SMFIC_BODYEOB)
         while True:
-            msg = self.get_real_msg()
+            msg = self.recv()
             res.append(msg)
             if msg[0] in DISPOSITION_REPLIES:
                 return res
@@ -193,7 +192,7 @@ class MilterConnection:
         it enough to disconnect abruptly on you."""
         actions, protocol = codec.optneg_mta_capable(actions, protocol)
         self.sock.sendall(codec.encode_optneg(actions, protocol))
-        r = self.get_msg()
+        r = self._recv()
         if r[0] != constants.SMFIC_OPTNEG:
             raise MilterError(f'Bad reply to SMFIR_OPTNEG, {r[0]}/{r[1]}')
         ract = r[1]['actions']
@@ -213,7 +212,7 @@ class MilterConnection:
         reading the MTA's SMFIR_OPTNEG and replying with ours.
         Returns a tuple of (actions, protocol) bitmasks for what
         both we and the MTA will do."""
-        r = self.get_msg()
+        r = self._recv()
         if r[0] != constants.SMFIC_OPTNEG:
             raise MilterError(f'Expected SMFIR_OPTNEG, received {r[0]}/{r[1]}')
         ract, rprot = codec.optneg_milter_capable(r[1]['actions'], r[1]['protocol'], actions, protocol)
