@@ -103,7 +103,7 @@ class FakeSocket:
         if r[0] != otype:
             raise ConvError(f'Received unexpected reply {r[0]} instead of {otype}')
         if len(wres) > 1 and r[1] != wres[1]:
-            raise ConvError('Unexpected reply parameters: {r[1] instead of {wres[1]}')
+            raise ConvError(f'Unexpected reply parameters: {r[1]} instead of {wres[1]}')
 
 
 # -----
@@ -174,7 +174,7 @@ class continuedTests(unittest.TestCase):
         """Test that we handle writing a large body in the way
         we expect."""
         s = FakeSocket()
-        body = ('*' * constants.MILTER_CHUNK_SIZE) * 3
+        body = 3 * 65535 * '*'
         s.addMTAWrite(constants.SMFIC_BODY)
         s.addMTAWrite(constants.SMFIC_BODY)
         s.addMTAWrite(constants.SMFIC_BODY)
@@ -187,7 +187,7 @@ class continuedTests(unittest.TestCase):
         """Test that we return early from a series of body writes
         if SMFIR_CONTINUE is not the code returned."""
         s = FakeSocket()
-        body = ('*' * constants.MILTER_CHUNK_SIZE) * 3
+        body = 3 * 65535 * '*'
         s.addMTAWrite(constants.SMFIC_BODY)
         s.addWrite(constants.SMFIC_BODY)
         s.addReadMsg(constants.SMFIR_ACCEPT)
@@ -196,9 +196,9 @@ class continuedTests(unittest.TestCase):
         self.assertTrue(s.isEmpty())
 
     optneg_mta_pairs = (
+        ((constants.SMFI_V6_ACTS, constants.SMFI_V6_PROT), (constants.SMFI_V6_ACTS, constants.SMFI_V6_PROT)),
         ((constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT), (constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT)),
         ((0x10, 0x10), (0x10, 0x10)),
-        ((0xFF, 0xFF), (constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT)),
     )
 
     def testMTAOptneg(self):
@@ -214,9 +214,9 @@ class continuedTests(unittest.TestCase):
             self.assertEqual(rprot, b[1])
 
     optneg_exc_errors = (
-        (constants.SMFI_V2_ACTS, 0xFF),
-        (0xFF, constants.SMFI_V2_PROT),
-        (0xFF, 0xFF),
+        (constants.SMFI_V1_ACTS, 0xFFFFFF),
+        (0xFFFFFF, constants.SMFI_V1_PROT),
+        (0xFFFFFF, 0xFFFFFF),
     )
 
     def testMilterONOutside(self):
@@ -230,15 +230,15 @@ class continuedTests(unittest.TestCase):
             self.assertRaises(MilterError, bm.optneg_mta)
 
     optneg_milter_pairs = (
-        # The basic case; MTA says all V2 actions, all V2 protocol
+        # The basic case; MTA says all V6 actions, all V6 protocol
         # exclusions, we say we'll take all actions and we want the
         # MTA not to exclude any protocol steps.
-        ((constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT), (constants.SMFI_V2_ACTS, 0x0)),
+        ((constants.SMFI_V6_ACTS, constants.SMFI_V6_PROT), (constants.SMFI_V6_ACTS, 0x0)),
         # MTA offers additional protocol exclusions, we tell it not
-        # to do them but to do all V2 protocol actions.
-        ((constants.SMFI_V2_ACTS, 0x1FF), (constants.SMFI_V2_ACTS, 0x180)),
+        # to do them but to do all V6 protocol actions.
+        ((constants.SMFI_V6_ACTS, 0xFFFFFF), (constants.SMFI_V6_ACTS, 0xE00000)),
         # MTA offers additional actions, we decline.
-        ((0xFFFF, constants.SMFI_V2_PROT), (constants.SMFI_V2_ACTS, 0x00)),
+        ((constants.SMFI_V6_ACTS, constants.SMFI_V6_PROT), (constants.SMFI_V2_ACTS, 0x00)),
     )
 
     def testMilterOptneg(self):
@@ -247,7 +247,7 @@ class continuedTests(unittest.TestCase):
             s = FakeSocket()
             s.addReadMsg(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION, actions=a[0], protocol=a[1])
             s.addFullWrite(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION, actions=b[0], protocol=b[1])
-            ract, rprot = MilterConnection(s).optneg_milter()
+            ract, rprot = MilterConnection(s).optneg_milter(actions=b[0])
             self.assertEqual(ract, b[0])
             self.assertEqual(rprot, b[1])
 

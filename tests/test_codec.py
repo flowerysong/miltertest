@@ -248,7 +248,7 @@ class basicTests(unittest.TestCase):
     # These test results are from the MTA side of things.
     optneg_tests = (
         ((0x0, 0x0), (0x0, 0x0)),
-        ((0xFF, 0xFF), (constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT)),
+        ((0xFFFFFF, 0xFFFFFF), (constants.SMFI_V6_ACTS, constants.SMFI_V6_PROT)),
         ((0x10, 0x10), (0x10, 0x10)),
         ((constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT), (constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT)),
     )
@@ -260,8 +260,9 @@ class basicTests(unittest.TestCase):
             self.assertEqual(r, b)
 
     optneg_milter_tests = (
+        ((constants.SMFI_V6_ACTS, constants.SMFI_V6_PROT), (constants.SMFI_V6_ACTS, 0), (constants.SMFI_V6_ACTS, 0)),
         ((constants.SMFI_V2_ACTS, constants.SMFI_V2_PROT), (constants.SMFI_V2_ACTS, 0), (constants.SMFI_V2_ACTS, 0)),
-        ((constants.SMFI_V2_ACTS, 0x1FF), (constants.SMFI_V2_ACTS, 0), (constants.SMFI_V2_ACTS, 0x180)),
+        ((constants.SMFI_V2_ACTS, 0xFFFFFF), (constants.SMFI_V2_ACTS, 0), (constants.SMFI_V2_ACTS, 0xE00000)),
     )
 
     def testOptnegMilterCap(self):
@@ -281,14 +282,13 @@ class basicTests(unittest.TestCase):
             rpair = (rdict['actions'], rdict['protocol'])
             self.assertEqual(rpair, b)
 
-    # Fast and dirty test, just to have something.
     def testOptnegMilterEncode(self):
         """Test encode_optneg() with is_milter=True, which should
-        not clamp protocol to SMFI_V2_PROT."""
-        r = codec.encode_optneg(actions=0xFF, protocol=0x180, is_milter=True)
+        not clamp protocol to SMFI_V6_PROT."""
+        r = codec.encode_optneg(actions=0xFFFFFF, protocol=0xFFFFFF, is_milter=True)
         rcmd, rdict, data = codec.decode_msg(r)
-        self.assertEqual(rdict['actions'], constants.SMFI_V2_ACTS)
-        self.assertEqual(rdict['protocol'], 0x180)
+        self.assertEqual(rdict['actions'], constants.SMFI_V6_ACTS)
+        self.assertEqual(rdict['protocol'], 0xFFFFFF)
 
 
 if __name__ == '__main__':

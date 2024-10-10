@@ -63,7 +63,6 @@ class MilterConnection:
         self.action_flags = None
         self.protocol_flags = None
 
-
     def _recv(self, eof_ok=False):
         """Retrieve the next message from the connection message.
         Returns the decoded message as a tuple of (cmd, paramdict).
@@ -183,16 +182,13 @@ class MilterConnection:
                 return res
 
     # Option negotiation from the MTA and milter view.
-    def optneg_mta(self, actions=constants.SMFI_V2_ACTS, protocol=constants.SMFI_V2_PROT, strict=True):
+    def optneg_mta(self, actions=constants.SMFI_V6_ACTS, protocol=constants.SMFI_V6_PROT, strict=True):
         """Perform the initial option negotiation as an MTA. Returns
         a tuple of (actions, protocol) bitmasks for what we support.
         If strict is True (the default), raises MilterError if
         the milter returns an SMFIC_OPTNEG that asks for things we
         told it that we do not support.
-
-        Can optionally be passed more restrictive values for actions
-        and protocol, but this is not recommended; milters may dislike
-        it enough to disconnect abruptly on you."""
+        """
         actions, protocol = codec.optneg_mta_capable(actions, protocol)
         self.sock.sendall(codec.encode_optneg(actions, protocol))
         r = self._recv()
@@ -212,7 +208,7 @@ class MilterConnection:
         self.protocol_flags = rprot
         return ract, rprot
 
-    def optneg_milter(self, actions=constants.SMFI_V2_ACTS, protocol=0):
+    def optneg_milter(self, actions=constants.SMFI_V6_ACTS, protocol=0):
         """Perform the initial option negotiation as a milter,
         reading the MTA's SMFIR_OPTNEG and replying with ours.
         Returns a tuple of (actions, protocol) bitmasks for what

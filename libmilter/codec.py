@@ -360,35 +360,33 @@ def decode_msg(data):
 # the MTA advertises what protocol steps it supports skipping and the
 # milter replies with what protocol steps *should* be skipped.
 # The common case is that the milter client wants all steps that are
-# in the V2 protocol and not any steps that aren't.
+# in the V6 protocol and not any steps that aren't.
 def optneg_mta_capable(actions, protocol):
-    """Return a bitmask of actions and protocols that milter.codec
-    can support."""
-    return (actions & constants.SMFI_V2_ACTS, protocol & constants.SMFI_V2_PROT)
+    """Return a bitmask of actions and protocols that we can support."""
+    return (actions & constants.SMFI_V6_ACTS, protocol & constants.SMFI_V6_PROT)
 
 
-def optneg_milter_capable(ractions, rprotocol, actions=constants.SMFI_V2_ACTS, protocol=0x0):
-    """Given an MTA's actions and protocol, and our actions and
-    protocol, return an (actions, protocol) tuple suitable for
-    use in a SMFIC_OPTNEG reply. Since our protocol is the steps
-    we wish the MTA to exclude, it will often be zero."""
-    actions = actions & constants.SMFI_V2_ACTS
+def optneg_milter_capable(ractions, rprotocol, actions=constants.SMFI_V6_ACTS, protocol=0x0):
+    """Given an MTA's actions and protocol, and our actions and protocol,
+    return an (actions, protocol) tuple suitable for use in an SMFIC_OPTNEG
+    reply. Since our protocol is the steps we wish the MTA to exclude, it will
+    often be zero."""
+    actions = actions & constants.SMFI_V6_ACTS
     oactions = ractions & actions
-    pmask = protocol | (0xFFFFFFF ^ constants.SMFI_V2_PROT)
+    pmask = protocol | (0xFFFFFFF ^ constants.SMFI_V6_PROT)
     oprotocol = rprotocol & pmask
     return (oactions, oprotocol)
 
 
 def encode_optneg(actions, protocol, is_milter=False):
-    """Encode a SMFIC_OPTNEG message based on the supplied actions
-    and protocol. Actions and protocol should normally have been
-    passed through either optneg_mta_capable() or
-    optneg_milter_capable()    depending on which side of the protocol
-    you are implementing."""
+    """Encode an SMFIC_OPTNEG message based on the supplied actions and
+    protocol. Actions and protocol should normally have been passed through
+    either optneg_mta_capable() or optneg_milter_capable() depending on which
+    side of the protocol you are implementing."""
     # We never encode any actions beyond what we support.
-    actions = actions & constants.SMFI_V2_ACTS
+    actions = actions & constants.SMFI_V6_ACTS
     # Unless we are handling the milter side of the protocol,
     # clamp the protocol bitmask to what we support.
     if not is_milter:
-        protocol = protocol & constants.SMFI_V2_PROT
+        protocol = protocol & constants.SMFI_V6_PROT
     return encode_msg(constants.SMFIC_OPTNEG, version=constants.MILTER_VERSION, actions=actions, protocol=protocol)
