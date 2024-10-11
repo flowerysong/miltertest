@@ -69,7 +69,7 @@ class FakeSocket:
         self._add(WRITE, (cmd, args))
 
     def addMTAWrite(self, cmd):
-        """Add an expected write command and then a SMFIR_CONTINUE
+        """Add an expected write command and then an SMFIR_CONTINUE
         reply to it."""
         self._add(WRITE, (cmd,))
         self.addReadMsg(constants.SMFIR_CONTINUE)

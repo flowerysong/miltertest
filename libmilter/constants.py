@@ -7,7 +7,7 @@
 # fmt: off
 
 MILTER_VERSION      = 6         # Milter version we claim to speak
-MILTER_CHUNK_SIZE   = 65535     # How large a SMFIC_BODY body can be
+MILTER_CHUNK_SIZE   = 65535     # How large an SMFIC_BODY body can be
 
 # Address families
 SMFIA_UNKNOWN   = 'U'

@@ -129,7 +129,7 @@ codec = {
 # strpairs: this generates an array, so we check that the array has an
 #     even number of elements (ie, has pairs). The array is allowed
 #     to be empty; as far as I can see, it is and should be valid to
-#     send a SMFIC_MACRO with no macro values set.
+#     send an SMFIC_MACRO with no macro values set.
 # strs:  this generates an array and we insist that the array has at least
 #     one value. 'strs' is used only by SMFIC_MAIL and SMFIC_RCPT,
 #     and the spec requires that the first array element is the actual

@@ -98,7 +98,7 @@ class MilterConnection:
             del data
 
     def recv(self, eof_ok=False):
-        """Read the next real message, one that is not a SMFIR_PROGRESS
+        """Read the next real message, one that is not an SMFIR_PROGRESS
         notification. The arguments are for get_msg."""
         while True:
             r = self._recv(eof_ok)
@@ -111,7 +111,7 @@ class MilterConnection:
         self.sock.sendall(codec.encode_msg(cmd, **args))
 
     def send_macro(self, cmdcode, **args):
-        """Send a SMFIC_MACRO message for the specific macro.
+        """Send an SMFIC_MACRO message for the specific macro.
         The name and values are taken from the keyword arguments."""
         namevals = [x for items in args.items() for x in items]
         self._send(constants.SMFIC_MACRO, cmdcode=cmdcode, nameval=namevals)
