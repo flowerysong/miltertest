@@ -8,8 +8,8 @@
 import struct
 import unittest
 
-from libmilter import codec
-from libmilter import constants
+from miltertest import codec
+from miltertest import constants
 
 
 class codingTests(unittest.TestCase):

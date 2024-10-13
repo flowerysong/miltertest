@@ -87,7 +87,7 @@ SMFI_V2_PROT = 0x00007f
 SMFI_V6_PROT = 0x1fffff
 
 # Acceptable response commands/codes to return to sendmail (with accompanying
-# command data).  From sendmail's include/libmilter/mfdef.h
+# command data).
 SMFIR_ADDRCPT       = '+'   # Add recipient
 SMFIR_DELRCPT       = '-'   # Delete recipient
 SMFIR_ADDRCPT_PAR   = '2'   # Add recipient (including ESMTP args)

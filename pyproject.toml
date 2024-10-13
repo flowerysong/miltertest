@@ -1,6 +1,6 @@
 [project]
-name = "libmilter"
-version = "0.0.1"
+name = "miltertest"
+version = "1.0.0"
 authors = [
   { name="Paul Arthur", email="paul.arthur@flowerysong.com" },
 ]

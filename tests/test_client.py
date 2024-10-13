@@ -4,9 +4,9 @@
 
 import unittest
 
-from libmilter import codec
-from libmilter import constants
-from libmilter import (
+from miltertest import codec
+from miltertest import constants
+from miltertest import (
     MilterConnection,
     MilterError,
 )

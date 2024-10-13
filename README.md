@@ -1,4 +1,4 @@
-# libmilter
+# miltertest
 
 This is a pure Python module implementing the milter protocol, based on
 Chris Siebenmann's work in [python-milter-tools](https://github.com/siebenmann/python-milter-tools).
